@@ -83,7 +83,7 @@ class GameScene {
 }
 //
 class Controller {
-    static eventType = ["click", "mousemove", "keydown"];
+    static eventType = ["click", "mousemove", "keydown", "keyup", "keypress"];
     constructor(canvas) {
         this.handlers = {};
 
@@ -91,6 +91,8 @@ class Controller {
             var handlers = {};
             this.handlers[type] = handlers;
             canvas.addEventListener(type, (e) => {
+                if (type != 'mousemove')
+                    console.log(type, e);
                 for (let handler of Object.values(this.handlers[type])) {
                     handler(e);
                 }
@@ -249,6 +251,49 @@ class Clickable extends GOAttribute {
     }
 }
 
+class KeyControl extends GOAttribute {
+    constructor(go, controller) {
+        super();
+        this.go = go;
+        this.controller = controller;
+        this.keydown = false;
+        this.keyup = false;
+        this.downKey = undefined;
+        this.upKey = undefined;
+
+        controller.addHandler('keydown', go, (e) => { this.onKeydown(e) });
+        controller.addHandler('keyup', go, (e) => { this.onKeyup(e) });
+        controller.addHandler('keypress', go, (e) => { this.onKeypress(e) });
+
+    }
+
+    onKeydown(e) {
+        console.log(e);
+        this.keydown = true;
+        this.downKey = e.KeyCode;
+    }
+
+    onKeyup(e) {
+        console.log(e);
+        this.keyup = true;
+        this.upKey = e.KeyCode;
+    }
+    onKeypress(e) {
+        console.log(e);
+    }
+    reset() {
+        this.keydown = false;
+        this.keyup = false;
+        this.downKey = undefined;
+        this.upKey = undefined;
+    }
+
+    destroy() {
+        this.controller.deleteHandler('keydown', this.go);
+        this.controller.deleteHandler('keyup', this.go);
+    }
+}
+
 export function startNoteWriter() {
     startGame(new NoteWriter(new Settings));
 }
@@ -277,6 +322,9 @@ class UserNoteManager extends GameObject {
         this.clickable = new Clickable(this.x, this.y, this.width, this.height, this, this.scene.controller)
         this.attributes.push(this.clickable);
 
+        this.keyControl = new KeyControl(this, this.scene.controller);
+        this.attributes.push(this.keyControl);
+
         this.gridNumX = 20;
         this.gridNumY = 36;
         this.gridWidth = this.width / this.gridNumX;
@@ -287,26 +335,32 @@ class UserNoteManager extends GameObject {
 
 
         this.noteWidth = this.gridWidth * 0.8;
-        this.noteHeight = Math.min(this.height * 0.8, this.noteWidth / 2);
+        this.noteHeight = Math.min(this.gridHeight * 0.8, this.noteWidth / 2);
         this.noteList = {}
+        this.bmp = 80;
     }
+
+    play() {
+        console.log('play')
+        for (let note of Object.values(this.noteList))
+            note.playInSequence();
+    }
+
     fixedUpdate(dt) {
         super.fixedUpdate(dt);
+        if (this.keyControl.keyup) {
+            //Space key
+            console.log(this.keyControl.upKey)
+            if (this.keyControl.upKey == 32) {
+                this.play();
+            }
+            this.keyControl.reset();
+        }
         if (this.clickable.clicked) {
-            // let hitNote = (() => {
-            //     for (let id in this.noteList)
-            //         if (this.noteList[id].clickable.clicked) {
-            //             this.noteList[id].destroy()
-            //             delete this.noteList[id];
-            //             return true;
-            //         }
-            //     return false;
-            // })();
-            // if (!hitNote) {
             const offsetX = this.clickable.clickedX - this.x, offsetY = this.clickable.clickedY - this.y;
             const gridX = Math.floor(offsetX / this.gridWidth), gridY = Math.floor(offsetY / this.gridHeight);
             const id = this.gridArray[gridX][gridY];
-            console.log(id);
+
             if (id) {
                 this.noteList[id].destroy()
                 delete this.noteList[id];
@@ -314,21 +368,19 @@ class UserNoteManager extends GameObject {
             } else {
                 const CenterX = this.x + gridX * this.gridWidth + 0.5 * this.gridWidth, CenterY = this.y + gridY * this.gridHeight + 0.5 * this.gridHeight;
 
-                var note = new Note(CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2, this.scene, this.noteWidth, this.noteHeight, gridY);
+                var note = new Note(CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2, this.scene, this.noteWidth, this.noteHeight, this.gridNumY - gridY - 1, gridX * 60 / this.bmp * 1000);
                 this.noteList[note.id] = note;
                 this.gridArray[gridX][gridY] = note.id;
 
                 note.play();
-                console.log(note);
             }
-            // }
             this.clickable.reset();
         }
     }
 }
 
 class Note extends GameObject {
-    constructor(x, y, scene, width, height, noteName) {
+    constructor(x, y, scene, width, height, noteName, startTime) {
         super(x, y, scene);
         this.width = width;
         this.height = height;
@@ -339,11 +391,17 @@ class Note extends GameObject {
 
         this.attributes.push(this.drawable);
         this.attributes.push(this.clickable);
-        console.log(window.location.pathname);
-        this.audio = new Audio('assets/sound/' + this.noteName + '.mp3');
+
+        this.startTime = startTime;
+        let path = require('../assets/sound/' + this.noteName + '.mp3');
+        this.audio = new Audio(path);
+        console.log(this.noteName);
     }
     play() {
         this.audio.play();
+    }
+    playInSequence() {
+        setTimeout(() => { this.audio.play(); }, this.startTime);
     }
     fixedUpdate(dt) {
         super.fixedUpdate(dt);
