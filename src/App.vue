@@ -1,19 +1,19 @@
 <template>
-  <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
+  <div id='app'>
+    <!-- <img alt='Vue logo' src='./assets/logo.png' /> -->
+    <CanvasGame msg='Welcome to Note Writer' />
   </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import CanvasGame from "./components/CanvasGame.vue";
 
 export default {
-  name: 'App',
+  name: "App",
   components: {
-    HelloWorld
-  }
-}
+    CanvasGame,
+  },
+};
 </script>
 
 <style>
