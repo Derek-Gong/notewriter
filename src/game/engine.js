@@ -1,4 +1,5 @@
-class Settings {
+import { pointInRect, drawLine, Rect } from './utils.js'
+export class Settings {
     constructor() {
         this.canvasName = "mainStage";
         this.canvasWidth = 1280;
@@ -7,7 +8,7 @@ class Settings {
 }
 
 //Entry point
-function startGame(scene) {
+export function startGame(scene) {
     var mainLoop = new MainLoop(scene);
     mainLoop.start();
     return mainLoop;
@@ -25,7 +26,7 @@ class MainLoop {
     constructor(scene) {
         this.scene = scene;
 
-        this.dt = 60;
+        this.dt = 16.67;
         this.looping = undefined;
     }
     start() {
@@ -53,11 +54,13 @@ class Canvas {
         this.width = this.canvas.width;
         this.height = this.canvas.height;
         this.context = this.canvas.getContext("2d");
+        //Make canvas focusable
+        this.canvas.tabIndex = 1;
     }
 }
 //Carry the whole game
 //Include canvas, game objects, controller
-class GameScene {
+export class GameScene {
     constructor(settings) {
         this.canvas = new Canvas(
             settings.canvasName,
@@ -70,7 +73,7 @@ class GameScene {
         this.controller = new Controller(this.canvas.canvas);
         this.goList = {};
     }
-    addGO(go) {
+    registerGO(go) {
         this.goList[go.id] = go;
     }
     deleteGO(go) {
@@ -91,8 +94,8 @@ class Controller {
             var handlers = {};
             this.handlers[type] = handlers;
             canvas.addEventListener(type, (e) => {
-                if (type != 'mousemove')
-                    console.log(type, e);
+                // if (type != 'mousemove')
+                //     console.log(type, e);
                 for (let handler of Object.values(this.handlers[type])) {
                     handler(e);
                 }
@@ -107,7 +110,7 @@ class Controller {
     }
 }
 
-class GameObject {
+export class GameObject {
     static nextID = 0;
     constructor(x, y, scene) {
         this.x = x;
@@ -117,9 +120,9 @@ class GameObject {
         this.id = GameObject.nextID++;
         this.destroyed = false;
 
-        this.scene.addGO(this)
+        this.scene.registerGO(this)
     }
-    registAttribute(attr) {
+    registerAttribute(attr) {
         this.attributes.push(attr);
     }
     //Handle game logic
@@ -137,12 +140,53 @@ class GameObject {
         this.scene.deleteGO(this);
     }
 }
+//Container of go which itself a go and can move all sons while x, y changed
+export class GOContainer extends GameObject {
+    constructor(x, y, scene) {
+        super(x, y, scene);
+        this._x = this.x;
+        this._y = this.y;
+        this.subNodes = {};
+        Object.defineProperty(this, 'x', {
+            get: function () { return this._x },
+            set: function (nx) {
+                const dx = nx - this._x;
+                const gos = Object.values(this.subNodes);
+                const len = gos.length;
+                for (let i = 0; i < len; i++)
+                    gos[i].x = gos[i].x + dx;
+                this._x = nx;
+            }
+        });
+        Object.defineProperty(this, 'y', {
+            get: function () { return this._y },
+            set: function (ny) {
+                const dy = ny - this._y;
+                const gos = Object.values(this.subNodes);
+                const len = gos.length;
+                for (let i = 0; i < len; i++)
+                    gos[i].y = gos[i].y + dy;
+                this._y = ny;
+            }
+        });
+    }
+    addSon(go) {
+        this.subNodes[go.id] = go;
+    }
+    deleteSon(go) {
+        delete this.subNodes[go.id];
+    }
+}
 
-class GOAttribute { }
+class GOAttribute {
+    constructor(go) {
+        go.registerAttribute(this);
+    }
+}
 
 class Drawable extends GOAttribute {
-    constructor(x, y) {
-        super();
+    constructor(go, x, y) {
+        super(go);
         this.x = x;
         this.y = y;
         this.visable = true;
@@ -152,9 +196,9 @@ class Drawable extends GOAttribute {
     }
 }
 
-class Rectangle extends Drawable {
-    constructor(x, y, width, height, color) {
-        super(x, y);
+export class RectDraw extends Drawable {
+    constructor(go, x, y, width, height, color) {
+        super(go, x, y);
         this.width = width;
         this.height = height;
         this.color = color;
@@ -170,11 +214,11 @@ class Rectangle extends Drawable {
     }
 }
 
-class Movable extends GOAttribute {
+export class Movable extends GOAttribute {
     //For 0 compare in millisecond
     static eps = 0.1;
-    constructor() {
-        super();
+    constructor(go) {
+        super(go);
         this.moveList = [];
     }
     move(dx, dy, dt) {
@@ -203,9 +247,9 @@ class Movable extends GOAttribute {
     }
 }
 
-class Clickable extends GOAttribute {
-    constructor(x, y, width, height, go, controller) {
-        super();
+export class MouseControl extends GOAttribute {
+    constructor(go, x, y, width, height, controller) {
+        super(go);
         this.x = x
         this.y = y
         this.clickedX = undefined;
@@ -220,12 +264,7 @@ class Clickable extends GOAttribute {
     }
 
     hitTest(x, y) {
-        const x1 = this.go.x + this.x,
-            x2 = x1 + this.width,
-            y1 = this.go.y + this.y,
-            y2 = y1 + this.height;
-
-        if (x1 <= x && x <= x2 && y1 <= y && y <= y2)
+        if (pointInRect(x, y, this.go.x + this.x, this.go.y + this.y, this.width, this.height))
             return true;
         return false;
     }
@@ -251,9 +290,9 @@ class Clickable extends GOAttribute {
     }
 }
 
-class KeyControl extends GOAttribute {
+export class KeyControl extends GOAttribute {
     constructor(go, controller) {
-        super();
+        super(go);
         this.go = go;
         this.controller = controller;
         this.keydown = false;
@@ -263,24 +302,24 @@ class KeyControl extends GOAttribute {
 
         controller.addHandler('keydown', go, (e) => { this.onKeydown(e) });
         controller.addHandler('keyup', go, (e) => { this.onKeyup(e) });
-        controller.addHandler('keypress', go, (e) => { this.onKeypress(e) });
+        // controller.addHandler('keypress', go, (e) => { this.onKeypress(e) });
 
     }
 
     onKeydown(e) {
-        console.log(e);
+        // console.log(e);
         this.keydown = true;
-        this.downKey = e.KeyCode;
+        this.downKey = e.keyCode;
     }
 
     onKeyup(e) {
-        console.log(e);
+        // console.log(e);
         this.keyup = true;
-        this.upKey = e.KeyCode;
+        this.upKey = e.keyCode;
     }
-    onKeypress(e) {
-        console.log(e);
-    }
+    // onKeypress(e) {
+    //     console.log(e);
+    // }
     reset() {
         this.keydown = false;
         this.keyup = false;
@@ -294,120 +333,71 @@ class KeyControl extends GOAttribute {
     }
 }
 
-export function startNoteWriter() {
-    startGame(new NoteWriter(new Settings));
-}
 
-//Game Implementatioin
-//
-
-//
-class NoteWriter extends GameScene {
-    constructor(settings) {
-        super(settings);
-        this.userNoteManager = new UserNoteManager(0, 0, this, this.width, this.height);
-    }
-}
-
-class Grid extends GameScene {
-
-}
-
-class UserNoteManager extends GameObject {
-    constructor(x, y, scene, width, height) {
+export class GridView extends GameObject {
+    constructor(x, y, scene, width, height, numX, numY) {
         super(x, y, scene);
         this.width = width;
         this.height = height;
 
-        this.clickable = new Clickable(this.x, this.y, this.width, this.height, this, this.scene.controller)
-        this.attributes.push(this.clickable);
-
-        this.keyControl = new KeyControl(this, this.scene.controller);
-        this.attributes.push(this.keyControl);
-
-        this.gridNumX = 20;
-        this.gridNumY = 36;
+        this.gridNumX = numX;
+        this.gridNumY = numY;
         this.gridWidth = this.width / this.gridNumX;
         this.gridHeight = this.height / this.gridNumY;
         this.gridArray = new Array(this.gridNumX);
         for (let i = 0; i < this.gridNumX; i++)
             this.gridArray[i] = new Array(this.gridNumY);
 
-
-        this.noteWidth = this.gridWidth * 0.8;
-        this.noteHeight = Math.min(this.gridHeight * 0.8, this.noteWidth / 2);
-        this.noteList = {}
-        this.bmp = 80;
     }
-
-    play() {
-        console.log('play')
-        for (let note of Object.values(this.noteList))
-            note.playInSequence();
+    hitTest(x, y) {
+        if (!pointInRect(x, y, this.x, this.y, this.width, this.height))
+            return false;
+        const offsetX = x - this.x, offsetY = y - this.y;
+        const gridX = Math.floor(offsetX / this.gridWidth), gridY = Math.floor(offsetY / this.gridHeight);
+        return { gridX: gridX, gridY: gridY };
     }
-
-    fixedUpdate(dt) {
-        super.fixedUpdate(dt);
-        if (this.keyControl.keyup) {
-            //Space key
-            console.log(this.keyControl.upKey)
-            if (this.keyControl.upKey == 32) {
-                this.play();
-            }
-            this.keyControl.reset();
+    getGrid(x, y) {
+        if (!Number.isInteger(x) || !Number.isInteger(y))
+            return false;
+        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
+            return this.gridArray[x][y];
+        return false;
+    }
+    setGrid(x, y, any) {
+        if (!Number.isInteger(x) || !Number.isInteger(y))
+            return;
+        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
+            this.gridArray[x][y] = any;
+    }
+    getGridRect(x, y) {
+        if (!Number.isInteger(x) || !Number.isInteger(y))
+            return false;
+        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
+            return new Rect(this.x + x * this.gridWidth, this.y + y * this.gridHeight, this.gridWidth, this.gridHeight);
+        return false;
+    }
+    clearGrid(x, y) {
+        if (!Number.isInteger(x) || !Number.isInteger(y))
+            return false;
+        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
+            this.gridArray[x][y] = undefined;
+    }
+    update(dt) {
+        super.update(dt);
+        let ctx = this.scene.context;
+        let x1, y1 = this.y,
+            x2, y2 = this.y + this.height
+        for (let i = 0; i <= this.gridNumX; i++) {
+            x1 = this.x + i * this.gridWidth;
+            x2 = x1;
+            drawLine(ctx, x1, y1, x2, y2, 1);
         }
-        if (this.clickable.clicked) {
-            const offsetX = this.clickable.clickedX - this.x, offsetY = this.clickable.clickedY - this.y;
-            const gridX = Math.floor(offsetX / this.gridWidth), gridY = Math.floor(offsetY / this.gridHeight);
-            const id = this.gridArray[gridX][gridY];
-
-            if (id) {
-                this.noteList[id].destroy()
-                delete this.noteList[id];
-                this.gridArray[gridX][gridY] = undefined;
-            } else {
-                const CenterX = this.x + gridX * this.gridWidth + 0.5 * this.gridWidth, CenterY = this.y + gridY * this.gridHeight + 0.5 * this.gridHeight;
-
-                var note = new Note(CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2, this.scene, this.noteWidth, this.noteHeight, this.gridNumY - gridY - 1, gridX * 60 / this.bmp * 1000);
-                this.noteList[note.id] = note;
-                this.gridArray[gridX][gridY] = note.id;
-
-                note.play();
-            }
-            this.clickable.reset();
+        x1 = this.x, x2 = this.x + this.width;
+        for (let i = 0; i <= this.gridNumY; i++) {
+            y1 = this.y + i * this.gridHeight;
+            y2 = y1;
+            drawLine(ctx, x1, y1, x2, y2, 1);
         }
-    }
-}
 
-class Note extends GameObject {
-    constructor(x, y, scene, width, height, noteName, startTime) {
-        super(x, y, scene);
-        this.width = width;
-        this.height = height;
-        this.noteName = String(noteName).padStart(2, '0');
-
-        this.drawable = new Rectangle(0, 0, this.width, this.height, 'black');
-        this.clickable = new Clickable(0, 0, this.width, this.height, this, this.scene.controller)
-
-        this.attributes.push(this.drawable);
-        this.attributes.push(this.clickable);
-
-        this.startTime = startTime;
-        let path = require('../assets/sound/' + this.noteName + '.mp3');
-        this.audio = new Audio(path);
-        console.log(this.noteName);
-    }
-    play() {
-        this.audio.play();
-    }
-    playInSequence() {
-        setTimeout(() => { this.audio.play(); }, this.startTime);
-    }
-    fixedUpdate(dt) {
-        super.fixedUpdate(dt);
-        if (this.clickable.clicked) {
-            // this.clickable.reset();
-            // this.destroy()
-        }
     }
 }
