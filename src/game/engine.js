@@ -193,6 +193,7 @@ export class GameObject {
         this.attributes = [];
         this.id = GameObject.nextID++;
         this.destroyed = false;
+        this.eventListeners = {};
 
         this.scene.registerGO(this)
     }
@@ -242,7 +243,18 @@ export class GameObject {
     update(dt) {
         for (let attr of this.attributes) if (attr.update) attr.update(dt, this);
     }
+    addEventListener(type, listener) {
+        if (!(type in this.eventListeners))
+            this.eventListeners[type] = [];
+        this.eventListeners[type].push(listener);
+    }
+    dispatchEvent(event) {
+        if (event.type in this.eventListeners)
+            for (let listener of this.eventListeners[event.type])
+                listener(event);
+    }
     destroy() {
+        this.dispatchEvent(new GOEvent('destroy', this.id));
         for (let attr of this.attributes) if (attr.destroy) attr.destroy(this);
         this.destroyed = true;
         for (let go of Object.values(this.sons))
@@ -250,43 +262,14 @@ export class GameObject {
         this.scene.deleteGO(this);
     }
 }
-// //Container of go which itself a go and can move all sons while x, y changed
-// export class GOContainer extends GameObject {
-//     constructor(x, y, scene) {
-//         super(x, y, scene);
-//         this._x = this.x;
-//         this._y = this.y;
-//         this.subNodes = {};
-//         Object.defineProperty(this, 'x', {
-//             get: function () { return this._x },
-//             set: function (nx) {
-//                 const dx = nx - this._x;
-//                 const gos = Object.values(this.subNodes);
-//                 const len = gos.length;
-//                 for (let i = 0; i < len; i++)
-//                     gos[i].x = gos[i].x + dx;
-//                 this._x = nx;
-//             }
-//         });
-//         Object.defineProperty(this, 'y', {
-//             get: function () { return this._y },
-//             set: function (ny) {
-//                 const dy = ny - this._y;
-//                 const gos = Object.values(this.subNodes);
-//                 const len = gos.length;
-//                 for (let i = 0; i < len; i++)
-//                     gos[i].y = gos[i].y + dy;
-//                 this._y = ny;
-//             }
-//         });
-//     }
-//     addSon(go) {
-//         this.subNodes[go.id] = go;
-//     }
-//     deleteSon(go) {
-//         delete this.subNodes[go.id];
-//     }
-// }
+
+class GOEvent {
+    static eventType = ['destroy'];
+    constructor(type, msg = undefined) {
+        this.type = type;
+        this.msg = msg;
+    }
+}
 
 class GOAttribute {
     constructor(go) {
@@ -471,7 +454,7 @@ export class GridView extends GameObject {
             return false;
         const offsetX = x - this.x, offsetY = y - this.y;
         const gridX = Math.floor(offsetX / this.gridWidth), gridY = Math.floor(offsetY / this.gridHeight);
-        return { gridX: gridX, gridY: gridY };
+        return { x: gridX, y: gridY };
     }
     getGrid(x, y) {
         if (!Number.isInteger(x) || !Number.isInteger(y))
