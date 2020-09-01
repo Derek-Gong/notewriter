@@ -70,14 +70,42 @@ export class GameScene {
         this.width = this.canvas.width;
         this.height = this.canvas.height;
         this.context = this.canvas.context;
-        this.controller = new Controller(this.canvas.canvas);
         this.goList = {};
+        this.goTree = { 'roots': {} };
+
+        this.controller = new Controller(this.canvas.canvas, this.goTree);
     }
     registerGO(go) {
         this.goList[go.id] = go;
+        let fa;
+        if (null == go.father) fa = 'roots';
+        else fa = go.father;
+        if (!(fa in this.goTree))
+            this.goTree[fa] = {};
+        this.goTree[fa][go.id] = go;
     }
     deleteGO(go) {
         delete this.goList[go.id];
+        if (null == go.father)
+            delete this.goTree['roots'][go.id];
+        else
+            delete this.goTree[go.father][go.id];
+
+        delete this.goTree[go.id];
+    }
+    addFather(go) {
+        if (null != go.father) {
+            delete this.goTree['roots'][go.id];
+            if (!(go.father in this.goTree))
+                this.goTree[go.father] = {};
+            this.goTree[go.father][go.id] = go;
+        }
+    }
+    deleteFather(go) {
+        if (null != go.father) {
+            delete this.goTree[go.father][go.id];
+            this.goTree['roots'][go.id] = go;
+        }
     }
     clear() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -86,13 +114,49 @@ export class GameScene {
 }
 //
 class Controller {
-    static eventType = ["click", "mousemove", "keydown", "keyup", "keypress"];
-    constructor(canvas) {
+    static mouseEvent = ["click", "mousemove"];
+    static otherEvent = ["keydown", "keyup", "keypress"];
+    constructor(canvas, goTree) {
         this.handlers = {};
+        this.captureHandlers = {};
+        for (let type of Controller.mouseEvent) {
+            this.handlers[type] = {};
+            this.captureHandlers[type] = {};
+            //mouse event handler MUST return a boolean, true to stop propagating on event chain
+            canvas.addEventListener(type, (e) => {
+                // if (type != 'mousemove')
+                //     console.log(type, e);
+                let captureHandlers = this.captureHandlers[type];
+                let handlers = this.handlers[type];
+                function traverse(go) {
+                    if (!go.hitTest(e.offsetX, e.offsetY))
+                        return false;
 
-        for (let type of Controller.eventType) {
-            var handlers = {};
-            this.handlers[type] = handlers;
+                    // console.log(go);
+                    let captureFlag = false;
+                    let bubbleFlag = false;
+                    if (go.id in captureHandlers)
+                        captureFlag = captureFlag || captureHandlers[go.id](e);
+                    //down to leaves
+                    if (!captureFlag)
+                        for (let go of Object.values(go.sons))
+                            bubbleFlag = bubbleFlag || traverse(go);
+                    // if (type == 'click')
+                    //     console.log(go, bubbleFlag);
+                    //up to roots
+                    if (!bubbleFlag && go.id in handlers)
+                        return handlers[go.id](e);
+                    return bubbleFlag;
+                }
+                // console.log(goTree);
+                for (let go of Object.values(goTree['roots']))
+                    traverse(go);
+
+            });
+        }
+        for (let type of Controller.otherEvent) {
+            this.handlers[type] = {};
+            this.captureHandlers[type] = {};
             canvas.addEventListener(type, (e) => {
                 // if (type != 'mousemove')
                 //     console.log(type, e);
@@ -101,6 +165,12 @@ class Controller {
                 }
             });
         }
+    }
+    addCaptureHandler(type, go, handler) {
+        this.captureHandlers[type][go.id] = handler;
+    }
+    deleteCaptureHandler(type, go) {
+        delete this.captureHandlers[type][go.id];
     }
     addHandler(type, go, handler) {
         this.handlers[type][go.id] = handler;
@@ -112,15 +182,53 @@ class Controller {
 
 export class GameObject {
     static nextID = 0;
-    constructor(x, y, scene) {
-        this.x = x;
-        this.y = y;
+    constructor(x, y, width, height, scene, father = null) {
+        this._x = x;
+        this._y = y;
+        this.width = width;
+        this.height = height;
+        this.sons = {};
         this.scene = scene;
+        this.father = father;
         this.attributes = [];
         this.id = GameObject.nextID++;
         this.destroyed = false;
 
         this.scene.registerGO(this)
+    }
+    get x() { return this._x }
+    set x(nx) {
+        const dx = nx - this._x;
+        const gos = Object.values(this.sons);
+        const len = gos.length;
+        for (let i = 0; i < len; i++)
+            gos[i].x = gos[i].x + dx;
+        this._x = nx;
+    }
+    get y() { return this._y }
+    set y(ny) {
+        const dy = ny - this._y;
+        const gos = Object.values(this.sons);
+        const len = gos.length;
+        for (let i = 0; i < len; i++)
+            gos[i].y = gos[i].y + dy;
+        this._y = ny;
+    }
+
+    addSon(go) {
+        this.sons[go.id] = go;
+        go.father = this.id;
+        this.scene.addFather(go);
+    }
+    deleteSon(go) {
+        delete this.sons[go.id];
+        this.scene.deleteFather(go);
+        go.father = null;
+    }
+    hitTest(x, y) {
+        if (pointInRect(x, y, this.x, this.y, this.width, this.height))
+            return true;
+        return false;
     }
     registerAttribute(attr) {
         this.attributes.push(attr);
@@ -137,46 +245,48 @@ export class GameObject {
     destroy() {
         for (let attr of this.attributes) if (attr.destroy) attr.destroy(this);
         this.destroyed = true;
+        for (let go of Object.values(this.sons))
+            go.destroy();
         this.scene.deleteGO(this);
     }
 }
-//Container of go which itself a go and can move all sons while x, y changed
-export class GOContainer extends GameObject {
-    constructor(x, y, scene) {
-        super(x, y, scene);
-        this._x = this.x;
-        this._y = this.y;
-        this.subNodes = {};
-        Object.defineProperty(this, 'x', {
-            get: function () { return this._x },
-            set: function (nx) {
-                const dx = nx - this._x;
-                const gos = Object.values(this.subNodes);
-                const len = gos.length;
-                for (let i = 0; i < len; i++)
-                    gos[i].x = gos[i].x + dx;
-                this._x = nx;
-            }
-        });
-        Object.defineProperty(this, 'y', {
-            get: function () { return this._y },
-            set: function (ny) {
-                const dy = ny - this._y;
-                const gos = Object.values(this.subNodes);
-                const len = gos.length;
-                for (let i = 0; i < len; i++)
-                    gos[i].y = gos[i].y + dy;
-                this._y = ny;
-            }
-        });
-    }
-    addSon(go) {
-        this.subNodes[go.id] = go;
-    }
-    deleteSon(go) {
-        delete this.subNodes[go.id];
-    }
-}
+// //Container of go which itself a go and can move all sons while x, y changed
+// export class GOContainer extends GameObject {
+//     constructor(x, y, scene) {
+//         super(x, y, scene);
+//         this._x = this.x;
+//         this._y = this.y;
+//         this.subNodes = {};
+//         Object.defineProperty(this, 'x', {
+//             get: function () { return this._x },
+//             set: function (nx) {
+//                 const dx = nx - this._x;
+//                 const gos = Object.values(this.subNodes);
+//                 const len = gos.length;
+//                 for (let i = 0; i < len; i++)
+//                     gos[i].x = gos[i].x + dx;
+//                 this._x = nx;
+//             }
+//         });
+//         Object.defineProperty(this, 'y', {
+//             get: function () { return this._y },
+//             set: function (ny) {
+//                 const dy = ny - this._y;
+//                 const gos = Object.values(this.subNodes);
+//                 const len = gos.length;
+//                 for (let i = 0; i < len; i++)
+//                     gos[i].y = gos[i].y + dy;
+//                 this._y = ny;
+//             }
+//         });
+//     }
+//     addSon(go) {
+//         this.subNodes[go.id] = go;
+//     }
+//     deleteSon(go) {
+//         delete this.subNodes[go.id];
+//     }
+// }
 
 class GOAttribute {
     constructor(go) {
@@ -224,6 +334,10 @@ export class Movable extends GOAttribute {
     move(dx, dy, dt) {
         this.moveList.push({ dx, dy, dt });
     }
+    moveTo(x, y) {
+        this.go.x = x;
+        this.go.y = y;
+    }
     fixedUpdate(dt, go) {
         var dx = 0,
             dy = 0;
@@ -248,7 +362,7 @@ export class Movable extends GOAttribute {
 }
 
 export class MouseControl extends GOAttribute {
-    constructor(go, x, y, width, height, controller) {
+    constructor(go, x, y, width, height, controller, clickRet = true, moveRet = true) {
         super(go);
         this.x = x
         this.y = y
@@ -259,8 +373,10 @@ export class MouseControl extends GOAttribute {
         this.clicked = false;
         this.go = go;
         this.controller = controller;
+        this.clickRet = clickRet
+        this.moveRet = moveRet;
 
-        controller.addHandler('click', go, (e) => { this.onClick(e) });
+        controller.addHandler('click', go, (e) => { return this.onClick(e); });
     }
 
     hitTest(x, y) {
@@ -270,13 +386,14 @@ export class MouseControl extends GOAttribute {
     }
 
     onClick(e) {
-        if (this.clicked) return;
+        if (this.clicked) return this.clickRet;
         const x = e.offsetX, y = e.offsetY;
         if (this.hitTest(x, y)) {
             this.clickedX = x;
             this.clickedY = y;
             this.clicked = true;
         }
+        return this.clickRet;
     }
 
     reset() {
@@ -300,8 +417,8 @@ export class KeyControl extends GOAttribute {
         this.downKey = undefined;
         this.upKey = undefined;
 
-        controller.addHandler('keydown', go, (e) => { this.onKeydown(e) });
-        controller.addHandler('keyup', go, (e) => { this.onKeyup(e) });
+        controller.addHandler('keydown', go, (e) => { this.onKeydown(e); return false; });
+        controller.addHandler('keyup', go, (e) => { this.onKeyup(e); return false; });
         // controller.addHandler('keypress', go, (e) => { this.onKeypress(e) });
 
     }
@@ -335,8 +452,8 @@ export class KeyControl extends GOAttribute {
 
 
 export class GridView extends GameObject {
-    constructor(x, y, scene, width, height, numX, numY) {
-        super(x, y, scene);
+    constructor(x, y, width, height, scene, numX, numY) {
+        super(x, y, width, height, scene);
         this.width = width;
         this.height = height;
 
