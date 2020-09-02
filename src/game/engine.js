@@ -186,8 +186,8 @@ export class GameObject {
     constructor(x, y, width, height, scene, father = null) {
         this._x = x;
         this._y = y;
-        this.width = width;
-        this.height = height;
+        this._width = width;
+        this._height = height;
         this.sons = {};
         this.scene = scene;
         this.father = father;
@@ -217,6 +217,20 @@ export class GameObject {
         this._y = ny;
     }
 
+    get width() {
+        return this._width;
+    }
+    set width(w) {
+        this._width = w;
+        this.dispatchEvent(new GOEvent('resize', this));
+    }
+    get height() {
+        return this._height;
+    }
+    set height(h) {
+        this._height = h;
+        this.dispatchEvent(new GOEvent('resize', this));
+    }
     addSon(go) {
         this.sons[go.id] = go;
         go.father = this.id;
@@ -250,6 +264,8 @@ export class GameObject {
         this.eventListeners[type].push(listener);
     }
     async dispatchEvent(event) {
+        if (!(event instanceof GOEvent))
+            throw 'wrong go event type from', this;
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
                 listener(event);
@@ -274,7 +290,8 @@ export class GOEvent {
 
 class GOAttribute {
     constructor(go) {
-        go.registerAttribute(this);
+        this.go = go;
+        this.go.registerAttribute(this);
     }
 }
 
@@ -296,6 +313,11 @@ export class RectDraw extends Drawable {
         this.width = width;
         this.height = height;
         this.color = color;
+
+        go.addEventListener('resize', (e) => { return this.onResize(e); });
+    }
+    onResize(e) {
+        ({ width: this.width, height: this.height } = e.msg);
     }
     update(dt, go) {
         super.update(dt, go);
@@ -353,13 +375,13 @@ export class MouseControl extends GOAttribute {
         this.width = width;
         this.height = height;
         this.clicked = false;
-        this.go = go;
         this.controller = controller;
         this.bubbling = bubbling
 
         controller.addHandler('mouseup', go, (e) => { return this.onMouse(e); });
         controller.addHandler('mousedown', go, (e) => { return this.onMouse(e); });
         controller.addHandler('mousemove', go, (e) => { return this.onMouse(e); });
+        go.addEventListener('resize', (e) => { return this.onResize(e); });
 
         this.clicked = false;
         this.dragging = false;
@@ -377,6 +399,10 @@ export class MouseControl extends GOAttribute {
         this.releaseY = undefined;
     }
 
+    onResize(e) {
+        ({ width: this.width, height: this.height } = e.msg);
+    }
+
     hitTest(x, y) {
         if (this.dragging) return true;
 
@@ -392,7 +418,7 @@ export class MouseControl extends GOAttribute {
                 // console.log(e.type);
                 //check click
                 if (this.type == 'mousedown') {
-                    console.log(e);
+                    // console.log(e);
                     this.clicked = true;
                 }
                 //check release
@@ -439,7 +465,9 @@ export class MouseControl extends GOAttribute {
     }
 
     destroy() {
-        this.controller.deleteHandler('click', this.go);
+        this.controller.deleteHandler('mouseup', this.go);
+        this.controller.deleteHandler('mousedown', this.go);
+        this.controller.deleteHandler('mousemove', this.go);
     }
 }
 

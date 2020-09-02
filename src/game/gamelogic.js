@@ -31,16 +31,20 @@ class NoteGird extends GridView {
     constructor(x, y, width, height, scene, numX, numY) {
         super(x, y, width, height, scene, numX, numY);
         this.noteWidth = this.gridWidth * 0.8;
-        this.noteHeight = Math.min(this.gridHeight * 0.8, this.noteWidth / 2);
+        this.noteHeight = this.gridHeight * 0.8;
 
         this.noteGridXY = {};
         this.bmp = 80;
     }
     createNote(x, y) {
-        const gridXY = this.hitTest(x, y);
+        const gridXY = this.hitTest(x, y);//out of box
         if (!gridXY) return false;
 
         const [gridX, gridY] = gridXY;
+        // console.log(gridXY);
+        if (this.getGrid(gridX, gridY))//possessed by another note
+            return false;
+
         // console.log(gridXY, gridX, gridY);
         const noteName = this.grid2Pitch(gridX, gridY);
         const [noteX, noteY] = this.getNoteXY(gridX, gridY);
@@ -49,6 +53,7 @@ class NoteGird extends GridView {
         const startTime = gridX * 60 / this.bmp * 1000;
         var note = new Note(noteX, noteY, this.noteWidth, this.noteHeight, this.scene, noteName, startTime);
         note.noteLen = Math.min(note.noteLen, this.gridNumX - gridX);
+        note.width = note.width + (note.noteLen - 1) * this.gridWidth;
         // console.log(note);
         note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
         note.addEventListener('move', (e) => { return this.onNoteMove(e); });
@@ -105,12 +110,11 @@ class NoteGird extends GridView {
     }
     onNoteRemove(e) {
         let note = e.msg;
-        for (let gridXY of this.noteGridXY[note.id])
-            this.clearGrid(gridXY.x, gridXY.y);
+        this.clearNote(note);
     }
     onNoteMove(e) {
         let note = e.msg;
-        const gridXY = this.hitTest(note.mouseControl.releaseX, note.mouseControl.releaseY);
+        const gridXY = this.hitTest(note.x, note.y);
 
         if (!gridXY) {
             this.moveNoteBack(note);
@@ -139,7 +143,7 @@ class UserNoteManager extends GameObject {
         this.mouseControl = new MouseControl(this, this.x, this.y, this.width, this.height, this.scene.controller)
         this.keyControl = new KeyControl(this, this.scene.controller);
 
-        this.gridView = new NoteGird(this.x, this.y, this.width, this.height, scene, 20, 36);
+        this.gridView = new NoteGird(this.x, this.y, this.width, this.height, scene, 20 * 4, 36);
         this.addSon(this.gridView);
 
         this.noteList = {}
@@ -165,7 +169,6 @@ class UserNoteManager extends GameObject {
             //Space key
             if (this.keyControl.upKey == 32) {
                 this.play();
-                console.log(this.noteList);
             }
         }
 
@@ -174,7 +177,7 @@ class UserNoteManager extends GameObject {
 
     handleMouse() {
         if (this.mouseControl.clicked) {
-            // console.log(this.mouseControl.offsetX, this.mouseControl.offsetY);
+            console.log(this.mouseControl.offsetX, this.mouseControl.offsetY);
             let note = this.gridView.createNote(this.mouseControl.offsetX, this.mouseControl.offsetY);
             if (note) {
                 note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
@@ -204,17 +207,15 @@ class UserNoteManager extends GameObject {
 class Note extends GameObject {
     constructor(x, y, width, height, scene, pitch, startTime) {
         super(x, y, width, height, scene);
-        this.width = width;
-        this.height = height;
         this.pitch = pitch;
-        this.noteLen = 1;
+        this.noteLen = 4;
 
         this.drawable = new RectDraw(this, 0, 0, this.width, this.height, 'black');
         this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller, true)
         this.movable = new Movable(this);
 
         this.startTime = startTime;
-        this.noteLen = 1;//fourth note
+        // this.noteLen = 1;//fourth note
         // console.log(this.noteName);
     }
     get pitch() {
