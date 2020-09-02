@@ -4,6 +4,8 @@ export class Settings {
         this.canvasName = "mainStage";
         this.canvasWidth = 1280;
         this.canvasHeight = 720;
+
+        this.fps = 60;
     }
 }
 
@@ -26,7 +28,7 @@ class MainLoop {
     constructor(scene) {
         this.scene = scene;
 
-        this.dt = 16.67;
+        this.dt = 1000 / this.scene.settings.fps;
         this.looping = undefined;
     }
     start() {
@@ -62,6 +64,7 @@ class Canvas {
 //Include canvas, game objects, controller
 export class GameScene {
     constructor(settings) {
+        this.settings = settings;
         this.canvas = new Canvas(
             settings.canvasName,
             settings.canvasWidth,
@@ -114,7 +117,7 @@ export class GameScene {
 }
 //
 class Controller {
-    static mouseEvent = ["click", "mousemove"];
+    static mouseEvent = ["click", "mousemove", 'mouseup', 'mousedown'];
     static otherEvent = ["keydown", "keyup", "keypress"];
     constructor(canvas, goTree) {
         this.handlers = {};
@@ -124,15 +127,14 @@ class Controller {
             this.captureHandlers[type] = {};
             //mouse event handler MUST return a boolean, true to stop propagating on event chain
             canvas.addEventListener(type, (e) => {
-                // if (type != 'mousemove')
+                // if (type == 'click')
                 //     console.log(type, e);
                 let captureHandlers = this.captureHandlers[type];
                 let handlers = this.handlers[type];
                 function traverse(go) {
-                    if (!go.hitTest(e.offsetX, e.offsetY))
+                    if (go.mouseControl && !go.mouseControl.hitTest(e.offsetX, e.offsetY))
                         return false;
 
-                    // console.log(go);
                     let captureFlag = false;
                     let bubbleFlag = false;
                     if (go.id in captureHandlers)
@@ -141,14 +143,11 @@ class Controller {
                     if (!captureFlag)
                         for (let go of Object.values(go.sons))
                             bubbleFlag = bubbleFlag || traverse(go);
-                    // if (type == 'click')
-                    //     console.log(go, bubbleFlag);
                     //up to roots
                     if (!bubbleFlag && go.id in handlers)
                         return handlers[go.id](e);
                     return bubbleFlag;
                 }
-                // console.log(goTree);
                 for (let go of Object.values(goTree['roots']))
                     traverse(go);
 
@@ -226,11 +225,11 @@ export class GameObject {
         this.scene.deleteFather(go);
         go.father = null;
     }
-    hitTest(x, y) {
-        if (pointInRect(x, y, this.x, this.y, this.width, this.height))
-            return true;
-        return false;
-    }
+    // hitTest(x, y) {
+    //     if (pointInRect(x, y, this.x, this.y, this.width, this.height))
+    //         return true;
+    //     return false;
+    // }
     registerAttribute(attr) {
         this.attributes.push(attr);
     }
@@ -345,44 +344,89 @@ export class Movable extends GOAttribute {
 }
 
 export class MouseControl extends GOAttribute {
-    constructor(go, x, y, width, height, controller, clickRet = true, moveRet = true) {
+    constructor(go, x, y, width, height, controller, bubbling = true) {
         super(go);
         this.x = x
         this.y = y
-        this.clickedX = undefined;
-        this.clickedY = undefined;
         this.width = width;
         this.height = height;
         this.clicked = false;
         this.go = go;
         this.controller = controller;
-        this.clickRet = clickRet
-        this.moveRet = moveRet;
+        this.bubbling = bubbling
 
-        controller.addHandler('click', go, (e) => { return this.onClick(e); });
+        controller.addHandler('mouseup', go, (e) => { return this.onMouse(e); });
+        controller.addHandler('mousedown', go, (e) => { return this.onMouse(e); });
+        controller.addHandler('mousemove', go, (e) => { return this.onMouse(e); });
+
+        this.clicked = false;
+        this.dragging = false;
+        this.releasing = false;
+        this.lastOffsetX = undefined;
+        this.lastOffsetY = undefined;
+        this.offsetX = undefined;
+        this.offsetY = undefined;
+        this.type = undefined;
+        this.lastType = undefined;
+        this.innerOffsetX = undefined;
+        this.innerOffsetY = undefined;
     }
 
     hitTest(x, y) {
+        if (this.dragging) return true;
+
         if (pointInRect(x, y, this.go.x + this.x, this.go.y + this.y, this.width, this.height))
             return true;
         return false;
     }
 
-    onClick(e) {
-        if (this.clicked) return this.clickRet;
+    onMouse(e) {
         const x = e.offsetX, y = e.offsetY;
         if (this.hitTest(x, y)) {
-            this.clickedX = x;
-            this.clickedY = y;
-            this.clicked = true;
+            if (e.type == 'mouseup') {
+                // console.log(e.type);
+                //check click
+                if (this.type == 'mousedown') {
+                    console.log(e.type, x, y);
+                    this.clicked = true;
+                }
+                //check release
+                else if (this.dragging) {
+                    this.dragging = false;
+                    this.releasing = true;
+                }
+            } else if (e.type == 'mousemove') {
+                //check dragging
+                if (this.type == 'mousedown') {
+                    this.dragging = true;
+                    this.innerOffsetX = this.offsetX - this.x - this.go.x;
+                    this.innerOffsetY = this.offsetY - this.y - this.go.y;
+                }
+            }
+            // if (e.type != 'mousemove' || this.dragging) {
+            this.lastOffsetX = this.offsetX;
+            this.lastOffsetY = this.offsetY;
+            this.lastType = this.type;
+            this.offsetX = x;
+            this.offsetY = y;
+            this.type = e.type;
+            // }
         }
-        return this.clickRet;
+        return this.bubbling;
     }
 
     reset() {
         this.clicked = false;
-        this.clickedX = undefined;
-        this.clickedy = undefined;
+        this.dragging = false;
+        this.releasing = false;
+        this.lastOffsetX = undefined;
+        this.lastOffsetY = undefined;
+        this.offsetX = undefined;
+        this.offsetY = undefined;
+        this.type = undefined;
+        this.lastType = undefined;
+        this.innerOffsetX = undefined;
+        this.innerOffsetY = undefined;
     }
 
     destroy() {

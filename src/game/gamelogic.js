@@ -91,28 +91,29 @@ class UserNoteManager extends GameObject {
 
     handleMouse() {
         if (this.mouseControl.clicked) {
-            const gridXY = this.gridView.hitTest(this.mouseControl.clickedX, this.mouseControl.clickedY);
+            console.log(this.mouseControl.offsetX, this.mouseControl.offsetY);
+            const gridXY = this.gridView.hitTest(this.mouseControl.offsetX, this.mouseControl.offsetY);
             // console.log(gridXY);
             if (gridXY) {
                 let gridX, gridY;
                 ({ x: gridX, y: gridY } = gridXY);
-                const id = this.gridView.getGrid(gridX, gridY);
-                if (id) {
+                // console.log(gridXY);
+                // const id = this.gridView.getGrid(gridX, gridY);
+                // if (id) {
 
-                    this.deleteSon(this.noteList[id]);
-                    this.noteList[id].destroy();
-                    delete this.noteList[id];
+                //     this.deleteSon(this.noteList[id]);
+                //     this.noteList[id].destroy();
+                //     delete this.noteList[id];
 
-                    this.gridView.clearGrid(gridX, gridY);
-                } else {
-                    const rect = this.gridView.getGridRect(gridX, gridY);
-                    const CenterX = rect.x + rect.width / 2, CenterY = rect.y + rect.height / 2;
+                //     this.gridView.clearGrid(gridX, gridY);
+                // } else {
+                const rect = this.gridView.getGridRect(gridX, gridY);
+                const CenterX = rect.x + rect.width / 2, CenterY = rect.y + rect.height / 2;
 
-                    const noteName = this.gridView.gridNumY - gridY - 1;
-                    let note = this.createNote(gridX, gridY, CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2, this.noteWidth, this.noteHeight, noteName, gridX * 60 / this.bmp * 1000);
+                const noteName = this.gridView.gridNumY - gridY - 1;
+                let note = this.createNote(gridX, gridY, CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2, this.noteWidth, this.noteHeight, noteName, gridX * 60 / this.bmp * 1000);
 
-                    note.play();
-                }
+                // }
             }
 
             this.mouseControl.reset();
@@ -127,6 +128,8 @@ class UserNoteManager extends GameObject {
         this.noteList[note.id] = note;
         this.addSon(note);
         this.gridView.setGrid(gridX, gridY, note.id);
+
+        note.play();
 
         return note;
     }
@@ -173,6 +176,11 @@ class Note extends GameObject {
         if (this.mouseControl.clicked) {
             this.mouseControl.reset();
             this.destroy()
+        } else if (this.mouseControl.dragging) {
+            this.x = this.mouseControl.offsetX - this.mouseControl.innerOffsetX;
+            this.y = this.mouseControl.offsetY - this.mouseControl.innerOffsetY;
+        } else if (this.mouseControl.releasing) {
+            this.mouseControl.reset();
         }
     }
 }
