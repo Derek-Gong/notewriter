@@ -141,8 +141,10 @@ class Controller {
                         captureFlag = captureFlag || captureHandlers[go.id](e);
                     //down to leaves
                     if (!captureFlag)
-                        for (let go of Object.values(go.sons))
-                            bubbleFlag = bubbleFlag || traverse(go);
+                        for (let go of Object.values(go.sons)) {
+                            let res = traverse(go);
+                            bubbleFlag = bubbleFlag || res;
+                        }
                     //up to roots
                     if (!bubbleFlag && go.id in handlers)
                         return handlers[go.id](e);

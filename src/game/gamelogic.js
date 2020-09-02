@@ -185,21 +185,6 @@ class UserNoteManager extends GameObject {
         }
     }
 
-    // createNote(gridX, gridY, x, y, width, heigth, noteName, startTime) {
-    //     var note = new Note(x, y, width, heigth, this.scene, noteName, startTime);
-    //     note.noteLen = Math.min(note.noteLen, this.gridView.gridNumX - gridX);
-    //     note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
-    //     note.addEventListener('destroy', (e) => { return this.gridView.onNoteRemove(e); });
-    //     note.addEventListener('move', (e) => { return this.gridView.onNoteMove(e); });
-    //     console.log(note);
-    //     this.noteList[note.id] = note;
-    //     this.addSon(note);
-    //     this.gridView.setNote(note);
-
-    //     note.play();
-
-    //     return note;
-    // }
     onNoteCreate(e) {
 
     }
