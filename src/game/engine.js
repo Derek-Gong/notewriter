@@ -247,13 +247,13 @@ export class GameObject {
             this.eventListeners[type] = [];
         this.eventListeners[type].push(listener);
     }
-    dispatchEvent(event) {
+    async dispatchEvent(event) {
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
                 listener(event);
     }
     destroy() {
-        this.dispatchEvent(new GOEvent('destroy', this.id));
+        this.dispatchEvent(new GOEvent('destroy', this));
         for (let attr of this.attributes) if (attr.destroy) attr.destroy(this);
         this.destroyed = true;
         for (let go of Object.values(this.sons))
@@ -262,7 +262,7 @@ export class GameObject {
     }
 }
 
-class GOEvent {
+export class GOEvent {
     static eventType = ['destroy'];
     constructor(type, msg = undefined) {
         this.type = type;
@@ -370,6 +370,9 @@ export class MouseControl extends GOAttribute {
         this.lastType = undefined;
         this.innerOffsetX = undefined;
         this.innerOffsetY = undefined;
+
+        this.releaseX = undefined;
+        this.releaseY = undefined;
     }
 
     hitTest(x, y) {
@@ -387,17 +390,21 @@ export class MouseControl extends GOAttribute {
                 // console.log(e.type);
                 //check click
                 if (this.type == 'mousedown') {
-                    console.log(e.type, x, y);
+                    console.log(e);
                     this.clicked = true;
                 }
                 //check release
                 else if (this.dragging) {
+                    e.locked = false;
                     this.dragging = false;
                     this.releasing = true;
+                    this.releaseX = x;
+                    this.releaseY = y;
                 }
             } else if (e.type == 'mousemove') {
                 //check dragging
                 if (this.type == 'mousedown') {
+                    e.locked = true;
                     this.dragging = true;
                     this.innerOffsetX = this.offsetX - this.x - this.go.x;
                     this.innerOffsetY = this.offsetY - this.y - this.go.y;
@@ -498,32 +505,33 @@ export class GridView extends GameObject {
             return false;
         const offsetX = x - this.x, offsetY = y - this.y;
         const gridX = Math.floor(offsetX / this.gridWidth), gridY = Math.floor(offsetY / this.gridHeight);
-        return { x: gridX, y: gridY };
+        return [gridX, gridY];
     }
-    getGrid(x, y) {
+    isGrid(x, y) {
         if (!Number.isInteger(x) || !Number.isInteger(y))
             return false;
-        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
-            return this.gridArray[x][y];
+        if (pointInRect(x, y, 0, 0, this.gridNumX - 1, this.gridNumY - 1))
+            return true;
+        return false;
+    }
+    getGrid(x, y) {
+        if (this.isGrid(x, y))
+            return undefined == this.gridArray[x][y] ? false : this.gridArray[x][y];
         return false;
     }
     setGrid(x, y, any) {
-        if (!Number.isInteger(x) || !Number.isInteger(y))
-            return;
-        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
-            this.gridArray[x][y] = any;
+        if (!this.isGrid(x, y))
+            return false;
+        this.gridArray[x][y] = any;
+        return true;
     }
     getGridRect(x, y) {
-        if (!Number.isInteger(x) || !Number.isInteger(y))
-            return false;
-        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
+        if (this.isGrid(x, y))
             return new Rect(this.x + x * this.gridWidth, this.y + y * this.gridHeight, this.gridWidth, this.gridHeight);
         return false;
     }
     clearGrid(x, y) {
-        if (!Number.isInteger(x) || !Number.isInteger(y))
-            return false;
-        if (pointInRect(x, y, 0, 0, this.gridNumX, this.gridNumY))
+        if (this.isGrid(x, y))
             this.gridArray[x][y] = undefined;
     }
     update(dt) {

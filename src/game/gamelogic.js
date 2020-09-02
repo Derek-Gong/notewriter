@@ -1,5 +1,5 @@
-import { startGame, Settings, GameScene, GOContainer, MouseControl, KeyControl, GridView, GameObject, RectDraw, Movable } from './engine.js';
-import { } from './utils.js';
+import { startGame, Settings, GameScene, GOEvent, MouseControl, KeyControl, GridView, GameObject, RectDraw, Movable } from './engine.js';
+import { pointInRect } from './utils.js';
 
 //Game Implementatioin
 //
@@ -30,18 +30,103 @@ class NoteWriter extends GameScene {
 class NoteGird extends GridView {
     constructor(x, y, width, height, scene, numX, numY) {
         super(x, y, width, height, scene, numX, numY);
+        this.noteWidth = this.gridWidth * 0.8;
+        this.noteHeight = Math.min(this.gridHeight * 0.8, this.noteWidth / 2);
+
         this.noteGridXY = {};
+        this.bmp = 80;
+    }
+    createNote(x, y) {
+        const gridXY = this.hitTest(x, y);
+        if (!gridXY) return false;
+
+        const [gridX, gridY] = gridXY;
+        // console.log(gridXY, gridX, gridY);
+        const noteName = this.grid2Pitch(gridX, gridY);
+        const [noteX, noteY] = this.getNoteXY(gridX, gridY);
+        // console.log(noteX, noteY);
+
+        const startTime = gridX * 60 / this.bmp * 1000;
+        var note = new Note(noteX, noteY, this.noteWidth, this.noteHeight, this.scene, noteName, startTime);
+        note.noteLen = Math.min(note.noteLen, this.gridNumX - gridX);
+        // console.log(note);
+        note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
+        note.addEventListener('move', (e) => { return this.onNoteMove(e); });
+        // console.log(note);
+        // this.noteList[note.id] = note;
+        this.addSon(note);
+        this.setNote(gridX, gridY, note);
+
+        note.play();
+
+        return note;
+    }
+    getNoteXY(x, y) {
+        if (!this.isGrid(x, y)) return false;
+
+        const rect = super.getGridRect(x, y);
+        const CenterX = rect.x + rect.width / 2, CenterY = rect.y + rect.height / 2;
+        return [CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2];
     }
     setGrid(x, y, id) {
-        super.setGrid(x, y, id);
+        if (!super.setGrid(x, y, id))
+            return false;
         if (!(id in this.noteGridXY))
             this.noteGridXY[id] = [];
-        this.noteGridXY[id].push({ x: x, y: y });
+        this.noteGridXY[id].push([x, y]);
+
+        return true;
+    }
+    setNote(x, y, note) {
+        if (!this.isGrid(x, y)) return false;
+
+        for (let i = 0; i < note.noteLen; i++)
+            this.setGrid(x + i, y, note.id);
+    }
+    clearNote(note) {
+        for (let [x, y] of this.noteGridXY[note.id])
+            this.clearGrid(x, y);
+        delete this.noteGridXY[note.id];
+    }
+    moveNote(x, y, note) {
+        if (!this.isGrid(x, y)) return false;
+
+        this.clearNote(note);
+        this.setNote(x, y, note);
+        note.pitch = this.grid2Pitch(x, y);
+        note.startGame = x * 60 / this.bmp * 1000;
+        [note.x, note.y] = this.getNoteXY(x, y);
+        //noteLen to be fixed
+    }
+    grid2Pitch(x, y) {
+        if (!this.isGrid(x, y))
+            return false;
+        return this.gridNumY - y - 1
     }
     onNoteRemove(e) {
-        let id = e.msg;
-        for (let gridXY of this.noteGridXY[id])
+        let note = e.msg;
+        for (let gridXY of this.noteGridXY[note.id])
             this.clearGrid(gridXY.x, gridXY.y);
+    }
+    onNoteMove(e) {
+        let note = e.msg;
+        const gridXY = this.hitTest(note.mouseControl.releaseX, note.mouseControl.releaseY);
+
+        if (!gridXY) {
+            this.moveNoteBack(note);
+        } else {
+            const [gridX, gridY] = gridXY;
+            let id = false;
+            for (let i = 0; i < note.noteLen; i++)
+                id = id || this.getGrid(gridX + i, gridY);
+            if (id) this.moveNoteBack(note);
+            else this.moveNote(gridX, gridY, note);
+        }
+        note.play();
+    }
+    moveNoteBack(go) {
+        const [gridX, gridY] = this.noteGridXY[go.id][0];
+        [go.x, go.y] = this.getNoteXY(gridX, gridY);
     }
 }
 
@@ -57,10 +142,7 @@ class UserNoteManager extends GameObject {
         this.gridView = new NoteGird(this.x, this.y, this.width, this.height, scene, 20, 36);
         this.addSon(this.gridView);
 
-        this.noteWidth = this.gridView.gridWidth * 0.8;
-        this.noteHeight = Math.min(this.gridView.gridHeight * 0.8, this.noteWidth / 2);
         this.noteList = {}
-        this.bmp = 80;
 
     }
 
@@ -83,6 +165,7 @@ class UserNoteManager extends GameObject {
             //Space key
             if (this.keyControl.upKey == 32) {
                 this.play();
+                console.log(this.noteList);
             }
         }
 
@@ -91,53 +174,38 @@ class UserNoteManager extends GameObject {
 
     handleMouse() {
         if (this.mouseControl.clicked) {
-            console.log(this.mouseControl.offsetX, this.mouseControl.offsetY);
-            const gridXY = this.gridView.hitTest(this.mouseControl.offsetX, this.mouseControl.offsetY);
-            // console.log(gridXY);
-            if (gridXY) {
-                let gridX, gridY;
-                ({ x: gridX, y: gridY } = gridXY);
-                // console.log(gridXY);
-                // const id = this.gridView.getGrid(gridX, gridY);
-                // if (id) {
-
-                //     this.deleteSon(this.noteList[id]);
-                //     this.noteList[id].destroy();
-                //     delete this.noteList[id];
-
-                //     this.gridView.clearGrid(gridX, gridY);
-                // } else {
-                const rect = this.gridView.getGridRect(gridX, gridY);
-                const CenterX = rect.x + rect.width / 2, CenterY = rect.y + rect.height / 2;
-
-                const noteName = this.gridView.gridNumY - gridY - 1;
-                let note = this.createNote(gridX, gridY, CenterX - this.noteWidth / 2, CenterY - this.noteHeight / 2, this.noteWidth, this.noteHeight, noteName, gridX * 60 / this.bmp * 1000);
-
-                // }
+            // console.log(this.mouseControl.offsetX, this.mouseControl.offsetY);
+            let note = this.gridView.createNote(this.mouseControl.offsetX, this.mouseControl.offsetY);
+            if (note) {
+                note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
+                this.noteList[note.id] = note;
             }
 
             this.mouseControl.reset();
         }
     }
 
-    createNote(gridX, gridY, x, y, width, heigth, noteName, startTime) {
-        var note = new Note(x, y, width, heigth, this.scene, noteName, startTime);
-        note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
-        note.addEventListener('destroy', (e) => { return this.gridView.onNoteRemove(e); });
+    // createNote(gridX, gridY, x, y, width, heigth, noteName, startTime) {
+    //     var note = new Note(x, y, width, heigth, this.scene, noteName, startTime);
+    //     note.noteLen = Math.min(note.noteLen, this.gridView.gridNumX - gridX);
+    //     note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
+    //     note.addEventListener('destroy', (e) => { return this.gridView.onNoteRemove(e); });
+    //     note.addEventListener('move', (e) => { return this.gridView.onNoteMove(e); });
+    //     console.log(note);
+    //     this.noteList[note.id] = note;
+    //     this.addSon(note);
+    //     this.gridView.setNote(note);
 
-        this.noteList[note.id] = note;
-        this.addSon(note);
-        this.gridView.setGrid(gridX, gridY, note.id);
+    //     note.play();
 
-        note.play();
+    //     return note;
+    // }
+    onNoteCreate(e) {
 
-        return note;
     }
-
     onNoteRemove(e) {
-        let id = e.msg;
-        this.deleteSon(this.noteList[id]);
-        delete this.noteList[id];
+        let go = e.msg;
+        delete this.noteList[go.id];
     }
 
     fixedUpdate(dt) {
@@ -149,11 +217,12 @@ class UserNoteManager extends GameObject {
 }
 
 class Note extends GameObject {
-    constructor(x, y, width, height, scene, noteName, startTime) {
+    constructor(x, y, width, height, scene, pitch, startTime) {
         super(x, y, width, height, scene);
         this.width = width;
         this.height = height;
-        this.noteName = String(noteName).padStart(2, '0');
+        this.pitch = pitch;
+        this.noteLen = 1;
 
         this.drawable = new RectDraw(this, 0, 0, this.width, this.height, 'black');
         this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller, true)
@@ -161,9 +230,15 @@ class Note extends GameObject {
 
         this.startTime = startTime;
         this.noteLen = 1;//fourth note
-        let path = require('../assets/sound/' + this.noteName + '.mp3');
-        this.audio = new Audio(path);
         // console.log(this.noteName);
+    }
+    get pitch() {
+        return this._pitch;
+    }
+    set pitch(p) {
+        this._pitch = String(p).padStart(2, '0');
+        let path = require('../assets/sound/' + this._pitch + '.mp3');
+        this.audio = new Audio(path);
     }
     play() {
         this.audio.play();
@@ -180,6 +255,7 @@ class Note extends GameObject {
             this.x = this.mouseControl.offsetX - this.mouseControl.innerOffsetX;
             this.y = this.mouseControl.offsetY - this.mouseControl.innerOffsetY;
         } else if (this.mouseControl.releasing) {
+            this.dispatchEvent(new GOEvent('move', this));
             this.mouseControl.reset();
         }
     }
