@@ -1,4 +1,4 @@
-import { pointInRect, drawLine, Rect } from './utils.js'
+import { pointInRect, drawLine, Rect, roundRect } from './utils.js'
 export class Settings {
     constructor() {
         this.canvasName = "mainStage";
@@ -308,11 +308,11 @@ class Drawable extends GOAttribute {
 }
 
 export class RectDraw extends Drawable {
-    constructor(go, x, y, width, height, color) {
+    constructor(go, x, y, width, height, fill) {
         super(go, x, y);
         this.width = width;
         this.height = height;
-        this.color = color;
+        this.fill = fill;
 
         go.addEventListener('resize', (e) => { return this.onResize(e); });
     }
@@ -323,10 +323,33 @@ export class RectDraw extends Drawable {
         super.update(dt, go);
         if (!this.visable) return;
         const ctx = go.scene.context;
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = this.fill;
         const x = go.x + this.x;
         const y = go.y + this.y;
         ctx.fillRect(x, y, this.width, this.height);
+    }
+}
+
+export class RoundRectDraw extends Drawable {
+    constructor(go, x, y, width, height, radius, fill, stroke) {
+        super(go, x, y);
+        this.width = width;
+        this.height = height;
+        this.radius = radius;
+        this.fill = fill;
+        this.stroke = stroke;
+
+        go.addEventListener('resize', (e) => { return this.onResize(e); });
+    }
+    onResize(e) {
+        ({ width: this.width, height: this.height } = e.msg);
+    }
+    update(dt, go) {
+        super.update(dt, go);
+        if (!this.visable) return;
+
+        const ctx = go.scene.context;
+        roundRect(ctx, go.x + this.x, go.y + this.y, this.width, this.height, this.radius, this.fill, this.stroke);
     }
 }
 
@@ -392,8 +415,8 @@ export class MouseControl extends GOAttribute {
         this.offsetY = undefined;
         this.type = undefined;
         this.lastType = undefined;
-        this.innerOffsetX = undefined;
-        this.innerOffsetY = undefined;
+        this.dragInnerX = undefined;
+        this.dragInnerY = undefined;
 
         this.releaseX = undefined;
         this.releaseY = undefined;
@@ -434,8 +457,8 @@ export class MouseControl extends GOAttribute {
                 if (this.type == 'mousedown') {
                     e.locked = true;
                     this.dragging = true;
-                    this.innerOffsetX = this.offsetX - this.x - this.go.x;
-                    this.innerOffsetY = this.offsetY - this.y - this.go.y;
+                    this.dragInnerX = this.offsetX - this.x - this.go.x;
+                    this.dragInnerY = this.offsetY - this.y - this.go.y;
                 }
             }
             // if (e.type != 'mousemove' || this.dragging) {
@@ -460,8 +483,8 @@ export class MouseControl extends GOAttribute {
         this.offsetY = undefined;
         this.type = undefined;
         this.lastType = undefined;
-        this.innerOffsetX = undefined;
-        this.innerOffsetY = undefined;
+        this.dragInnerX = undefined;
+        this.dragInnerY = undefined;
     }
 
     destroy() {

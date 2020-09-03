@@ -1,4 +1,4 @@
-import { startGame, Settings, GameScene, GOEvent, MouseControl, KeyControl, GridView, GameObject, RectDraw, Movable } from './engine.js';
+import { startGame, Settings, GameScene, GOEvent, MouseControl, KeyControl, GridView, GameObject, RectDraw, RoundRectDraw, Movable } from './engine.js';
 import { pointInRect } from './utils.js';
 
 //Game Implementatioin
@@ -16,7 +16,7 @@ class GameSettings extends Settings {
         this.soundPath = undefined;
         this.noteNum = undefined;
         this.sixtenthNoteWidth = 10;
-
+        this.bmp = 80;
     }
 }
 
@@ -30,11 +30,12 @@ class NoteWriter extends GameScene {
 class NoteGird extends GridView {
     constructor(x, y, width, height, scene, numX, numY) {
         super(x, y, width, height, scene, numX, numY);
-        this.noteWidth = this.gridWidth * 0.8;
+        this.noteWidth = this.gridWidth;
         this.noteHeight = this.gridHeight * 0.8;
+        this.fourthWidth = this.gridWidth * 4;// 4/4 time, a gird is a sixteenth note.
 
         this.noteGridXY = {};
-        this.bmp = 80;
+        this.bmp = this.scene.settings.bmp;
     }
     createNote(x, y) {
         const gridXY = this.hitTest(x, y);//out of box
@@ -42,21 +43,21 @@ class NoteGird extends GridView {
 
         const [gridX, gridY] = gridXY;
         // console.log(gridXY);
-        if (this.getGrid(gridX, gridY))//possessed by another note
-            return false;
+        for (let i = 0; i < 4; i++)
+            if (this.getGrid(gridX + i, gridY))//possessed by another note
+                return false;
 
         // console.log(gridXY, gridX, gridY);
         const noteName = this.grid2Pitch(gridX, gridY);
         const [noteX, noteY] = this.getNoteXY(gridX, gridY);
         // console.log(noteX, noteY);
 
-        const startTime = gridX * 60 / this.bmp * 1000;
-        var note = new Note(noteX, noteY, this.noteWidth, this.noteHeight, this.scene, noteName, startTime);
-        note.noteLen = Math.min(note.noteLen, this.gridNumX - gridX);
-        note.width = note.width + (note.noteLen - 1) * this.gridWidth;
-        // console.log(note);
+        const startGridX = gridX;
+        var note = new Note(noteX, noteY, this.fourthWidth, this.noteHeight, this.scene, noteName, this.fourthWidth, startGridX, 4, this.bmp);
+
         note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
         note.addEventListener('move', (e) => { return this.onNoteMove(e); });
+        note.addEventListener('resize', (e) => { return this.onNoteResize(e); });
         // console.log(note);
         // this.noteList[note.id] = note;
         this.addSon(note);
@@ -99,9 +100,13 @@ class NoteGird extends GridView {
         this.clearNote(note);
         this.setNote(x, y, note);
         note.pitch = this.grid2Pitch(x, y);
-        note.startGame = x * 60 / this.bmp * 1000;
+        note.startGridX = x;
         [note.x, note.y] = this.getNoteXY(x, y);
         //noteLen to be fixed
+    }
+    moveNoteBack(go) {
+        const [gridX, gridY] = this.noteGridXY[go.id][0];
+        [go.x, go.y] = this.getNoteXY(gridX, gridY);
     }
     grid2Pitch(x, y) {
         if (!this.isGrid(x, y))
@@ -123,14 +128,16 @@ class NoteGird extends GridView {
             let id = false;
             for (let i = 0; i < note.noteLen; i++)
                 id = id || this.getGrid(gridX + i, gridY);
-            if (id) this.moveNoteBack(note);
+            if (id && id != note.id) this.moveNoteBack(note);
             else this.moveNote(gridX, gridY, note);
         }
         note.play();
     }
-    moveNoteBack(go) {
-        const [gridX, gridY] = this.noteGridXY[go.id][0];
-        [go.x, go.y] = this.getNoteXY(gridX, gridY);
+    onNoteResize(e) {
+        let note = e.msg;
+
+        const [gridX, gridY] = this.hitTest(note.x, note.y);
+        this.moveNote(gridX, gridY, note);
     }
 }
 
@@ -177,7 +184,6 @@ class UserNoteManager extends GameObject {
 
     handleMouse() {
         if (this.mouseControl.clicked) {
-            console.log(this.mouseControl.offsetX, this.mouseControl.offsetY);
             let note = this.gridView.createNote(this.mouseControl.offsetX, this.mouseControl.offsetY);
             if (note) {
                 note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
@@ -205,18 +211,22 @@ class UserNoteManager extends GameObject {
 }
 
 class Note extends GameObject {
-    constructor(x, y, width, height, scene, pitch, startTime) {
+    constructor(x, y, width, height, scene, pitch, fourthWidth, startGridX, noteLen, bmp) {
+
         super(x, y, width, height, scene);
         this.pitch = pitch;
-        this.noteLen = 4;
+        this.fourthWidth = fourthWidth;
+        this.startGridX = startGridX;
+        this.noteLen = noteLen;//num of sixteenth note
+        this.bmp = bmp;
 
-        this.drawable = new RectDraw(this, 0, 0, this.width, this.height, 'black');
+        this.drawable = new RoundRectDraw(this, 0, 0, this.width, this.height, this.height / 2, 'black');
         this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller, true)
         this.movable = new Movable(this);
 
-        this.startTime = startTime;
         // this.noteLen = 1;//fourth note
         // console.log(this.noteName);
+        this.dragEdge = false;
     }
     get pitch() {
         return this._pitch;
@@ -226,11 +236,33 @@ class Note extends GameObject {
         let path = require('../assets/sound/' + this._pitch + '.mp3');
         this.audio = new Audio(path);
     }
+    get startTime() {
+        return this.startGridX / 4;
+    }
+    set startTime(t) {
+        this.startGridX = Math.round(t * 4);
+    }
+    get noteLen() {
+        return this._noteLen;
+    }
+    set noteLen(l) {
+        this._noteLen = l;
+        this.duration = this._noteLen / 4;
+        this.width = this.duration * this.fourthWidth;
+    }
     play() {
         this.audio.play();
+        this.drawable.fill = 'red'
+        setTimeout(() => {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+            this.drawable.fill = 'black'
+        }, 60 * 1000 / this.bmp * this.duration);
     }
     playInSequence() {
-        setTimeout(() => { this.audio.play(); }, this.startTime);
+        setTimeout(() => {
+            this.play();
+        }, 60 * 1000 / this.bmp * this.startTime);
     }
     fixedUpdate(dt) {
         super.fixedUpdate(dt);
@@ -238,10 +270,28 @@ class Note extends GameObject {
             this.mouseControl.reset();
             this.destroy()
         } else if (this.mouseControl.dragging) {
-            this.x = this.mouseControl.offsetX - this.mouseControl.innerOffsetX;
-            this.y = this.mouseControl.offsetY - this.mouseControl.innerOffsetY;
+            //drag right 80% edge
+            if (this.mouseControl.dragInnerX / this.width > 0.8) {
+                // if (!this.dragEdge) this.originWidth = this.width;
+                this.dragEdge = true;
+            }
+
+            if (this.dragEdge) {
+                this.originNoteLen = this.noteLen;
+                const innerX = this.mouseControl.offsetX - this.x;
+                this.noteLen = Math.floor(Math.max(0, Math.min(innerX, this.fourthWidth - 1)) / this.fourthWidth * 4) + 1;
+
+            } else {
+                this.x = this.mouseControl.offsetX - this.mouseControl.dragInnerX;
+                this.y = this.mouseControl.offsetY - this.mouseControl.dragInnerY;
+            }
         } else if (this.mouseControl.releasing) {
-            this.dispatchEvent(new GOEvent('move', this));
+            if (this.dragEdge) {
+                this.dragEdge = false;
+            } else {
+
+                this.dispatchEvent(new GOEvent('move', this));
+            }
             this.mouseControl.reset();
         }
     }
