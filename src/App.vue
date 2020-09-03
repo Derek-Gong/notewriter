@@ -1,7 +1,7 @@
 <template>
   <div id='app'>
     <!-- <img alt='Vue logo' src='./assets/logo.png' /> -->
-    <CanvasGame msg='Welcome to Note Writer' />
+    <CanvasGame msg='Welcome to Note Writer, Press Space to Play' />
   </div>
 </template>
 
