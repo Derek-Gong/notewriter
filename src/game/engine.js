@@ -539,10 +539,12 @@ export class KeyControl extends GOAttribute {
 
 
 export class GridView extends GameObject {
-    constructor(x, y, width, height, scene, numX, numY) {
+    constructor(x, y, width, height, scene, numX, numY, lineWidth = 1, strokeStyle = '#000000') {
         super(x, y, width, height, scene);
         this.width = width;
         this.height = height;
+        this.lineWidth = lineWidth;
+        this.strokeStyle = strokeStyle;
 
         this.gridNumX = numX;
         this.gridNumY = numY;
@@ -595,13 +597,13 @@ export class GridView extends GameObject {
         for (let i = 0; i <= this.gridNumX; i++) {
             x1 = this.x + i * this.gridWidth;
             x2 = x1;
-            drawLine(ctx, x1, y1, x2, y2, 1);
+            drawLine(ctx, x1, y1, x2, y2, this.lineWidth, this.strokeStyle);
         }
         x1 = this.x, x2 = this.x + this.width;
         for (let i = 0; i <= this.gridNumY; i++) {
             y1 = this.y + i * this.gridHeight;
             y2 = y1;
-            drawLine(ctx, x1, y1, x2, y2, 1);
+            drawLine(ctx, x1, y1, x2, y2, this.lineWidth, this.strokeStyle);
         }
 
     }

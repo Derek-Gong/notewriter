@@ -14,10 +14,10 @@ export function drawLine(ctx, x1, y1, x2, y2, lineWidth = 1, strokeStyle = '#000
     ctx.stroke();
 }
 
-export function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-    if (typeof stroke === 'undefined') {
-        stroke = true;
-    }
+export function roundRect(ctx, x, y, width, height, radius, fill = false, stroke = false) {
+    // if (typeof stroke === 'undefined') {
+    //     stroke = true;
+    // }
     if (typeof radius === 'undefined') {
         radius = 5;
     }

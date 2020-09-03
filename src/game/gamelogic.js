@@ -150,8 +150,10 @@ class UserNoteManager extends GameObject {
         this.mouseControl = new MouseControl(this, this.x, this.y, this.width, this.height, this.scene.controller)
         this.keyControl = new KeyControl(this, this.scene.controller);
 
-        this.gridView = new NoteGird(this.x, this.y, this.width, this.height, scene, 20 * 4, 36);
-        this.addSon(this.gridView);
+        this.noteGird = new NoteGird(this.x, this.y, this.width, this.height, scene, 20 * 4, 36);
+        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height, scene, 20, 36, 2);
+        this.addSon(this.noteGird);
+        this.addSon(this.fourthNoteGrid);
 
         this.noteList = {}
 
@@ -184,7 +186,7 @@ class UserNoteManager extends GameObject {
 
     handleMouse() {
         if (this.mouseControl.clicked) {
-            let note = this.gridView.createNote(this.mouseControl.offsetX, this.mouseControl.offsetY);
+            let note = this.noteGird.createNote(this.mouseControl.offsetX, this.mouseControl.offsetY);
             if (note) {
                 note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
                 this.noteList[note.id] = note;
@@ -288,8 +290,8 @@ class Note extends GameObject {
         } else if (this.mouseControl.releasing) {
             if (this.dragEdge) {
                 this.dragEdge = false;
+                this.play();
             } else {
-
                 this.dispatchEvent(new GOEvent('move', this));
             }
             this.mouseControl.reset();
