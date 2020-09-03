@@ -43,8 +43,13 @@ class MainLoop {
     }
     loopOnce() {
         this.scene.clear();
+
         for (let go of Object.values(this.scene.goList)) go.fixedUpdate(this.dt);
-        for (let go of Object.values(this.scene.goList)) go.update(this.dt);
+
+        let gos = Object.values(this.scene.goList).sort((a, b) => {
+            return a.layer - b.layer;
+        })
+        for (let go of gos) go.update(this.dt);
     }
 }
 //Manage Canvas
@@ -75,6 +80,7 @@ export class GameScene {
         this.context = this.canvas.context;
         this.goList = {};
         this.goTree = { 'roots': {} };
+        this.eventListeners = {};
 
         this.controller = new Controller(this.canvas.canvas, this.goTree);
     }
@@ -109,6 +115,18 @@ export class GameScene {
             delete this.goTree[go.father][go.id];
             this.goTree['roots'][go.id] = go;
         }
+    }
+    addEventListener(type, listener) {
+        if (!(type in this.eventListeners))
+            this.eventListeners[type] = [];
+        this.eventListeners[type].push(listener);
+    }
+    async dispatchEvent(event) {
+        if (!(event instanceof GOEvent))
+            throw 'wrong scene event type';
+        if (event.type in this.eventListeners)
+            for (let listener of this.eventListeners[event.type])
+                listener(event);
     }
     clear() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -183,7 +201,7 @@ class Controller {
 
 export class GameObject {
     static nextID = 0;
-    constructor(x, y, width, height, scene, father = null) {
+    constructor(x, y, width, height, scene, father = null, layer = 0) {
         this._x = x;
         this._y = y;
         this._width = width;
@@ -191,6 +209,7 @@ export class GameObject {
         this.sons = {};
         this.scene = scene;
         this.father = father;
+        this.layer = layer;
         this.attributes = [];
         this.id = GameObject.nextID++;
         this.destroyed = false;
@@ -269,6 +288,8 @@ export class GameObject {
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
                 listener(event);
+
+        this.scene.dispatchEvent(event);
     }
     destroy() {
         this.dispatchEvent(new GOEvent('destroy', this));
