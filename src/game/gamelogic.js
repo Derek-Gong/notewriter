@@ -16,9 +16,9 @@ class GameSettings extends Settings {
         super();
         this.soundPath = undefined;
         this.noteNum = undefined;
-        this.sixtenthNoteWidth = 40;
+        this.sixtenthNoteWidth = 10;
         this.bpm = 80;
-        this.userNoteNum = 2000;
+        this.userNoteNum = 200;
         this.pitchNum = 36;
     }
 }
@@ -26,7 +26,7 @@ class GameSettings extends Settings {
 class NoteWriter extends GameScene {
     constructor(settings) {
         super(settings);
-        this.userNoteManager = new UserNoteManager(0, 0, this.settings.sixtenthNoteWidth * this.settings.userNoteNum, this.height, this);
+        this.userNoteManager = new UserNoteManager(0, 0, this.settings.sixtenthNoteWidth * this.settings.userNoteNum * 4, this.height, this);
         // this.userNoteManager.layer = 1;
         // this.genNoteManager = new GenNoteManager(0, 0, this.width, this.height, this);
         // this.genNoteManager.layer = 0;
@@ -398,14 +398,16 @@ class Note extends GameObject {
         return this._noteLen / 4;
     }
     play() {
-        this.audio.play();
-        let c = this.drawable.fill;
-        this.drawable.fill = 'red'
-        setTimeout(() => {
-            this.audio.pause();
-            this.audio.currentTime = 0;
-            this.drawable.fill = c
-        }, 60 * 1000 / this.bpm * this.duration);
+        console.log(this);
+        this.audio.play().then(() => {
+            let c = this.drawable.fill;
+            this.drawable.fill = 'red'
+            setTimeout(() => {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.drawable.fill = c
+            }, 60 * 1000 / this.bpm * this.duration);
+        });
     }
     playInSequence() {
         setTimeout(() => {
