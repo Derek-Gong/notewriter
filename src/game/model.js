@@ -31,16 +31,42 @@
 //     }]
 //   }
 
-class Note {
-
+export class Note {
+    constructor(pitch, startTime, endTime) {
+        this.pitch = pitch;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
 }
 
-class NoteSequence {
-
+export class NoteSequence {
+    constructor(totalTime, bpm, notes) {
+        this.ticksPerQuarter = 220;
+        this.totalTime = totalTime;
+        this.timeSignatures = [
+            {
+                time: 0,
+                numerator: 4,
+                denominator: 4,
+            }
+        ];
+        this.tempos = [
+            {
+                time: 0,
+                qpm: bpm
+            }
+        ];
+        this.notes = notes;
+    }
 }
 
-class NoteGenerator {
-    sample(noteSequence) {
-        //return a NoteSequence
+export class NoteGenerator {
+    constructor() { }
+    sample(noteSequence) {//for test
+        for (let note of noteSequence.notes) {
+            note.startTime += noteSequence.totalTime;
+            note.endTime += noteSequence.totalTime;
+        }
+        return noteSequence;
     }
 }

@@ -143,16 +143,17 @@ class Controller {
         for (let type of Controller.mouseEvent) {
             this.handlers[type] = {};
             this.captureHandlers[type] = {};
+            //handle event capture and event bubble
             //mouse event handler MUST return a boolean, true to stop propagating on event chain
             canvas.addEventListener(type, (e) => {
-                // if (type == 'click')
-                //     console.log(type, e);
                 let captureHandlers = this.captureHandlers[type];
                 let handlers = this.handlers[type];
                 function traverse(go) {
                     if (go.mouseControl && !go.mouseControl.hitTest(e.offsetX, e.offsetY))
                         return false;
 
+                    // if (type == 'click')
+                    //     console.log(type, go, go.father);
                     let captureFlag = false;
                     let bubbleFlag = false;
                     if (go.id in captureHandlers)
@@ -164,8 +165,9 @@ class Controller {
                             bubbleFlag = bubbleFlag || res;
                         }
                     //up to roots
-                    if (!bubbleFlag && go.id in handlers)
+                    if (!bubbleFlag && go.id in handlers) {
                         return handlers[go.id](e);
+                    }
                     return bubbleFlag;
                 }
                 for (let go of Object.values(goTree['roots']))
@@ -459,10 +461,8 @@ export class MouseControl extends GOAttribute {
         const x = e.offsetX, y = e.offsetY;
         if (this.hitTest(x, y)) {
             if (e.type == 'mouseup') {
-                // console.log(e.type);
                 //check click
                 if (this.type == 'mousedown') {
-                    // console.log(e);
                     this.clicked = true;
                 }
                 //check release
