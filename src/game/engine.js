@@ -6,6 +6,7 @@ export class Settings {
         this.canvasHeight = 720;
 
         this.fps = 60;
+        this.tickRate = 64;
     }
 }
 
@@ -82,7 +83,7 @@ export class GameScene {
         this.goTree = { 'roots': {} };
         this.eventListeners = {};
 
-        this.controller = new Controller(this.canvas.canvas, this.goTree);
+        this.controller = new Controller(this.canvas.canvas, this.goTree, this.settings.tickRate);
     }
     registerGO(go) {
         this.goList[go.id] = go;
@@ -137,15 +138,22 @@ export class GameScene {
 class Controller {
     static mouseEvent = ["click", "mousemove", 'mouseup', 'mousedown'];
     static otherEvent = ["keydown", "keyup", "keypress"];
-    constructor(canvas, goTree) {
+    constructor(canvas, goTree, tickRate = 64) {
         this.handlers = {};
         this.captureHandlers = {};
+        this.tickRate = tickRate;
+        this.lastTick = new Date().getTime();
         for (let type of Controller.mouseEvent) {
             this.handlers[type] = {};
             this.captureHandlers[type] = {};
             //handle event capture and event bubble
             //mouse event handler MUST return a boolean, true to stop propagating on event chain
             canvas.addEventListener(type, (e) => {
+                const curtick = new Date().getTime();
+                if (curtick - this.lastTick < 1000 / this.tickRate)
+                    return;
+                this.lastTick = curtick;
+
                 let captureHandlers = this.captureHandlers[type];
                 let handlers = this.handlers[type];
                 function traverse(go) {
