@@ -1,4 +1,4 @@
-import { pointInRect, drawLine, Rect, roundRect } from './utils.js'
+import { pointInRect, drawLine, Rect, roundRect, rectXRect } from './utils.js'
 export class Settings {
     constructor() {
         this.canvasName = "mainStage";
@@ -319,22 +319,25 @@ class GOAttribute {
 }
 
 class Drawable extends GOAttribute {
-    constructor(go, x, y) {
+    constructor(go, x, y, width, height) {
         super(go);
         this.x = x;
         this.y = y;
+        this.width = width;
+        this.height = height;
         this.visable = true;
+        this.outOfScene = false;
     }
     update(dt, go) {
         if (!this.visable) return;
+        this.outOfScene = !rectXRect(new Rect(this.x + this.go.x, this.y + this.go.y, this.width, this.height),
+            new Rect(0, 0, this.go.scene.width, this.go.scene.height));
     }
 }
 
 export class RectDraw extends Drawable {
     constructor(go, x, y, width, height, fill) {
-        super(go, x, y);
-        this.width = width;
-        this.height = height;
+        super(go, x, y, width, height);
         this.fill = fill;
 
         go.addEventListener('resize', (e) => { return this.onResize(e); });
@@ -344,7 +347,7 @@ export class RectDraw extends Drawable {
     }
     update(dt, go) {
         super.update(dt, go);
-        if (!this.visable) return;
+        if (!this.visable || this.outOfScene) return;
         const ctx = go.scene.context;
         ctx.fillStyle = this.fill;
         const x = go.x + this.x;
@@ -355,9 +358,7 @@ export class RectDraw extends Drawable {
 
 export class RoundRectDraw extends Drawable {
     constructor(go, x, y, width, height, radius, fill, stroke) {
-        super(go, x, y);
-        this.width = width;
-        this.height = height;
+        super(go, x, y, width, height);
         this.radius = radius;
         this.fill = fill;
         this.stroke = stroke;
@@ -369,7 +370,7 @@ export class RoundRectDraw extends Drawable {
     }
     update(dt, go) {
         super.update(dt, go);
-        if (!this.visable) return;
+        if (!this.visable || this.outOfScene) return;
 
         const ctx = go.scene.context;
         roundRect(ctx, go.x + this.x, go.y + this.y, this.width, this.height, this.radius, this.fill, this.stroke);

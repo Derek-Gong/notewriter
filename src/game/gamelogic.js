@@ -71,11 +71,17 @@ class NoteGird extends GridView {
         const gridXY = this.getNoteXY(gridX, gridY);
         if (!gridXY) return false;
 
-        let newNote = new Note(gridXY[0], gridXY[1], this.fourthWidth * note.noteLen / 4, this.noteHeight, this.scene, note.pitch, this.fourthWidth, note.startTime, note.noteLen, this.bpm);
-        note.destroy();
+        // let newNote = new Note(, gridXY[1], this.fourthWidth * note.noteLen / 4, this.noteHeight, this.scene, note.pitch, this.fourthWidth, note.startTime, note.noteLen, this.bpm);
+        note.x = gridXY[0];
+        note.y = gridXY[1];
+        note.width = this.fourthWidth * note.noteLen / 4;
+        note.height = this.noteHeight
+        note.fourthWidth = this.fourthWidth;
+        note.bpm = this.bpm;
+        // note.destroy();
 
-        this.addNote(gridX, gridY, newNote);
-        return newNote;
+        this.addNote(gridX, gridY, note);
+        return note;
     }
     addNote(gridX, gridY, note) {
 
@@ -188,6 +194,8 @@ class UserNoteManager extends GameObject {
         this.addSon(this.fourthNoteGrid);
         this.addSon(this.noteGenerator);
 
+        this.soundPool = SoundPool.getInstance();
+        this.scene.addEventListener('noteCreate', (e) => { return this.onNoteCreate(e); });
         this.noteList = {}
         this.genList = {}
     }
@@ -201,10 +209,10 @@ class UserNoteManager extends GameObject {
         if (this.keyControl.keydown) {
             //left arrow
             if (this.keyControl.downKey == 37) {
-                this.x -= 2;
+                this.x -= 5;
             }
             if (this.keyControl.downKey == 39) {
-                this.x += 2;
+                this.x += 5;
             }
         }
         if (this.keyControl.keyup) {
@@ -224,7 +232,6 @@ class UserNoteManager extends GameObject {
                 this.dispatchEvent(new GOEvent('newNote', this.noteList));
 
                 note.play();
-
                 this.clearGenNotes();
                 this.genNotes();
             }
@@ -239,15 +246,14 @@ class UserNoteManager extends GameObject {
     genNotes() {
         let genList = this.noteGenerator.sample(this.noteList);
         for (let note of genList) {
-            let newNote = this.noteGrid.placeNote(note)
-            if (newNote) {
-                newNote.drawable.fill = 'green';
-                newNote.isGen = true;
-                newNote.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
-                newNote.addEventListener('select', (e) => { return this.onGenNoteSelect(e); });
+            if (this.noteGrid.placeNote(note)) {
+                note.drawable.fill = 'green';
+                note.isGen = true;
+                note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
+                note.addEventListener('select', (e) => { return this.onGenNoteSelect(e); });
 
-                this.genList[newNote.id] = newNote;
-            }
+                this.genList[note.id] = note;
+            } else note.destroy();
         }
     }
     createNote(x, y, noteLen = 4) {
@@ -274,6 +280,9 @@ class UserNoteManager extends GameObject {
         }
         this.clearGenNotes();
         this.genNotes();
+    }
+    onNoteCreate(e) {
+        e.msg.soundPool = this.soundPool;
     }
     onNoteChange(e) {
         this.clearGenNotes();
@@ -353,22 +362,58 @@ class NoteGenerator extends GameObject {
     }
 }
 
-class Note extends GameObject {
-    constructor(x, y, width, height, scene, pitch, fourthWidth, startTime, noteLen, bpm) {
+class SoundPool {
+    static instance;
+    constructor() {
+        this.sounds = {};
+        for (let i = 0; i < 36; i++) {
+            const filename = String(i).padStart(2, '0');
+            const path = require('../assets/sound/' + filename + '.mp3');
+            this.sounds[i] = new Audio(path);
+        }
+    }
+    async play(pitch, duration) {
+        await this.sounds[pitch].play().then(() => {
+            setTimeout(() => {
+                this.sounds[pitch].pause();
+                this.sounds[pitch].currentTime = 0;
+            }, duration);
+        });
+    }
+    static getInstance() {
+        if (!SoundPool.instance) {
+            if (!SoundPool.instance) {
+                SoundPool.instance = new SoundPool();
+                delete SoundPool.instance.constructor;
+            }
+        }
+        return SoundPool.instance;
+    }
+}
 
+class Note extends GameObject {
+    constructor(x, y, width, height, scene, pitch, fourthWidth, startTime, noteLen, bpm, soundPool) {
         super(x, y, width, height, scene);
         this.pitch = pitch;
         this.fourthWidth = fourthWidth;
         this.startTime = startTime;
         this.noteLen = noteLen;//num of sixteenth note
         this.bpm = bpm;
-
+        this.soundPool = soundPool;
+        // console.log(this.width, this.height);
         this.drawable = new RoundRectDraw(this, 0, 0, this.width, this.height, this.height / 2, 'black');
         this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller, true)
         this.movable = new Movable(this);
 
         this.dragEdge = false;
         this.isGen = false;
+        this.addEventListener('resize', (e) => { return this.onResize(e); });
+
+        this.dispatchEvent(new GOEvent('noteCreate', this));
+    }
+    onResize(e) {
+        this.drawable.height = this.height;
+        this.drawable.radius = this.height / 2;
     }
     get isGen() {
         return this._isGen;
@@ -377,16 +422,16 @@ class Note extends GameObject {
         this._isGen = b;
         // this.mouseControl.bubbling = !this._isGen;
     }
-    get pitch() {
-        return this._pitch;
-    }
-    set pitch(p) {
-        if (p == this._pitch) return;
+    // get pitch() {
+    //     return this._pitch;
+    // }
+    // set pitch(p) {
+    //     if (p == this._pitch) return;
 
-        this._pitch = String(p).padStart(2, '0');
-        let path = require('../assets/sound/' + this._pitch + '.mp3');
-        this.audio = new Audio(path);
-    }
+    //     this._pitch = String(p).padStart(2, '0');
+    //     let path = require('../assets/sound/' + this._pitch + '.mp3');
+    //     this.audio = new Audio(path);
+    // }
     get noteLen() {
         return this._noteLen;
     }
@@ -397,17 +442,23 @@ class Note extends GameObject {
     get duration() {
         return this._noteLen / 4;
     }
-    play() {
-        console.log(this);
-        this.audio.play().then(() => {
-            let c = this.drawable.fill;
-            this.drawable.fill = 'red'
-            setTimeout(() => {
-                this.audio.pause();
-                this.audio.currentTime = 0;
-                this.drawable.fill = c
-            }, 60 * 1000 / this.bpm * this.duration);
-        });
+    async play() {
+        let c = this.drawable.fill;
+        this.drawable.fill = 'red'
+        this.soundPool.play(this.pitch, 60 * 1000 / this.bpm * this.duration);
+        setTimeout(() => {
+            this.drawable.fill = c;
+        }, 60 * 1000 / this.bpm * this.duration);
+        // console.log(this);
+        // this.audio.play().then(() => {
+        //     let c = this.drawable.fill;
+        //     this.drawable.fill = 'red'
+        //     setTimeout(() => {
+        //         this.audio.pause();
+        //         this.audio.currentTime = 0;
+        //         this.drawable.fill = c
+        //     }, 60 * 1000 / this.bpm * this.duration);
+        // });
     }
     playInSequence() {
         setTimeout(() => {

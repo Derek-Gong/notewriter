@@ -5,6 +5,14 @@ export function pointInRect(x, y, rectX, rectY, width, height) {
     return false;
 }
 
+export function rectXRect(rect1, rect2) {
+    const l1 = rect1.x, r1 = rect1.x + rect1.width, t1 = rect1.y, b1 = rect1.y + rect1.height;
+    const l2 = rect2.x, r2 = rect2.x + rect2.width, t2 = rect2.y, b2 = rect2.y + rect2.height;
+
+    if (r1 < l2 || r2 < l1 || b1 < t2 || b2 < t1) return false;
+    return true;
+}
+
 export function drawLine(ctx, x1, y1, x2, y2, lineWidth = 1, strokeStyle = '#000000') {
     ctx.strokeStyle = strokeStyle;
     ctx.lineWidth = lineWidth;
