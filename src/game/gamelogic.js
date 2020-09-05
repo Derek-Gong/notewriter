@@ -28,7 +28,7 @@ class NoteWriter extends GameScene {
     constructor(settings) {
         super(settings);
         this.userNoteManager = new UserNoteManager(0, 0, this.settings.sixtenthNoteWidth * this.settings.userNoteNum * 4, this.height, this);
-        this.gridMask = new MouseMask(0, 0, 100, 100, this, this.userNoteManager.noteGrid);
+        // this.gridMask = new MouseMask(0, 0, 100, 100, this, this.userNoteManager.noteGrid);
         // this.userNoteManager.layer = 1;
         // this.genNoteManager = new GenNoteManager(0, 0, this.width, this.height, this);
         // this.genNoteManager.layer = 0;
@@ -339,8 +339,10 @@ class NoteGenerator extends GameObject {
             notes = Object.values(Object.assign({}, noteList));
         else notes = noteList;
         let seq = this.notes2Seq(notes);
-        return this.noteGenerator.sample(seq).then(seqGen => {
-            return this.seq2Notes(seq);
+        console.log(seq);
+        return this.noteGenerator.sample(seq, seq.totalTime + 16).then(seqGen => {
+            console.log(seqGen);
+            return this.seq2Notes(seqGen);
         });
     }
     notes2Seq(notes) {
@@ -498,7 +500,7 @@ class Note extends GameObject {
                 if (this.dragEdge) {
                     this.originNoteLen = this.noteLen;
                     const innerX = this.mouseControl.offsetX - this.x;
-                    this.noteLen = Math.floor(Math.max(0, Math.min(innerX, this.fourthWidth - 1)) / this.fourthWidth * 4) + 1;
+                    this.noteLen = Math.floor(Math.max(0, Math.min(innerX, this.fourthWidth * 4 - 1)) / this.fourthWidth * 4) + 1;
 
                 } else {
                     this.x = this.mouseControl.offsetX - this.mouseControl.dragInnerX;
