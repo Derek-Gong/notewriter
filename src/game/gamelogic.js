@@ -244,17 +244,18 @@ class UserNoteManager extends GameObject {
         this.genList = {};
     }
     genNotes() {
-        let genList = this.noteGenerator.sample(this.noteList);
-        for (let note of genList) {
-            if (this.noteGrid.placeNote(note)) {
-                note.drawable.fill = 'green';
-                note.isGen = true;
-                note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
-                note.addEventListener('select', (e) => { return this.onGenNoteSelect(e); });
+        this.noteGenerator.sample(this.noteList).then(genList => {
+            for (let note of genList) {
+                if (this.noteGrid.placeNote(note)) {
+                    note.drawable.fill = 'green';
+                    note.isGen = true;
+                    note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
+                    note.addEventListener('select', (e) => { return this.onGenNoteSelect(e); });
 
-                this.genList[note.id] = note;
-            } else note.destroy();
-        }
+                    this.genList[note.id] = note;
+                } else note.destroy();
+            }
+        });
     }
     createNote(x, y, noteLen = 4) {
         let note = this.noteGrid.createNote(x, y, noteLen);
@@ -331,8 +332,9 @@ class NoteGenerator extends GameObject {
             notes = Object.values(Object.assign({}, noteList));
         else notes = noteList;
         let seq = this.notes2Seq(notes);
-        seq = this.noteGenerator.sample(seq);
-        return this.seq2Notes(seq);
+        return this.noteGenerator.sample(seq).then(seqGen => {
+            return this.seq2Notes(seq);
+        });
     }
     notes2Seq(notes) {
         notes.sort((a, b) => {
