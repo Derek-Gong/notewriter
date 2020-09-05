@@ -1,6 +1,7 @@
 import { startGame, Settings, GameScene, GOEvent, MouseControl, KeyControl, GridView, GameObject, RectDraw, RoundRectDraw, Movable } from './engine.js';
 import { pointInRect } from './utils.js';
 import * as Model from './model.js';
+import { GOMask, MouseMask } from './gamerender.js';
 
 //Game Implementatioin
 //
@@ -17,7 +18,7 @@ class GameSettings extends Settings {
         this.soundPath = undefined;
         this.noteNum = undefined;
         this.sixtenthNoteWidth = 10;
-        this.bpm = 80;
+        this.bpm = 120;
         this.userNoteNum = 200;
         this.pitchNum = 36;
     }
@@ -27,6 +28,7 @@ class NoteWriter extends GameScene {
     constructor(settings) {
         super(settings);
         this.userNoteManager = new UserNoteManager(0, 0, this.settings.sixtenthNoteWidth * this.settings.userNoteNum * 4, this.height, this);
+        this.gridMask = new MouseMask(0, 0, 100, 100, this, this.userNoteManager.noteGrid);
         // this.userNoteManager.layer = 1;
         // this.genNoteManager = new GenNoteManager(0, 0, this.width, this.height, this);
         // this.genNoteManager.layer = 0;
@@ -147,10 +149,10 @@ class NoteGird extends GridView {
     grid2Pitch(x, y) {
         if (!this.isGrid(x, y))
             return false;
-        return this.gridNumY - y - 1
+        return this.gridNumY - y - 1 + 48;
     }
     pitch2GridY(p) {
-        return this.gridNumY - p - 1;
+        return this.gridNumY - p - 1 + 48;
     }
     onNoteRemove(e) {
         let note = e.msg;
@@ -271,11 +273,16 @@ class UserNoteManager extends GameObject {
     onGenNoteSelect(e) {
         let curNote = e.msg;
         let notes = Object.values(this.genList);
+        if (notes.length < 1) return;
         notes.sort((a, b) => { return a.startTime - b.startTime; });
+
+        let offset = notes[0].startTime;
+
         for (let note of notes) {
             note.destroy();
-            let n = this.createNote(note.x, note.y, note.noteLen);
-            console.log(n);
+            let userNote = this.createNote(note.x, note.y, note.noteLen);
+            userNote.playInSequence(offset);
+
             if (note.id == curNote.id)
                 break;
         }
@@ -371,7 +378,7 @@ class SoundPool {
         for (let i = 0; i < 36; i++) {
             const filename = String(i).padStart(2, '0');
             const path = require('../assets/sound/' + filename + '.mp3');
-            this.sounds[i] = new Audio(path);
+            this.sounds[i + 48] = new Audio(path);
         }
     }
     async play(pitch, duration) {
@@ -396,6 +403,7 @@ class SoundPool {
 class Note extends GameObject {
     constructor(x, y, width, height, scene, pitch, fourthWidth, startTime, noteLen, bpm, soundPool) {
         super(x, y, width, height, scene);
+        this.layer = 100;
         this.pitch = pitch;
         this.fourthWidth = fourthWidth;
         this.startTime = startTime;
@@ -462,10 +470,10 @@ class Note extends GameObject {
         //     }, 60 * 1000 / this.bpm * this.duration);
         // });
     }
-    playInSequence() {
+    playInSequence(offset = 0) {
         setTimeout(() => {
             this.play();
-        }, 60 * 1000 / this.bpm * this.startTime);
+        }, 60 * 1000 / this.bpm * (this.startTime - offset));
     }
     handleMouse() {
 

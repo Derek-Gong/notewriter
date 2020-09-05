@@ -62,6 +62,7 @@ class Canvas {
         this.width = this.canvas.width;
         this.height = this.canvas.height;
         this.context = this.canvas.getContext("2d");
+        this.addEventListener = (type, func) => { this.canvas.addEventListener(type, func); };
         //Make canvas focusable
         this.canvas.tabIndex = 1;
     }
@@ -83,7 +84,7 @@ export class GameScene {
         this.goTree = { 'roots': {} };
         this.eventListeners = {};
 
-        this.controller = new Controller(this.canvas.canvas, this.goTree, this.settings.tickRate);
+        this.controller = new Controller(this, this.goTree, this.settings.tickRate);
     }
     registerGO(go) {
         this.goList[go.id] = go;
@@ -136,9 +137,9 @@ export class GameScene {
 }
 //
 class Controller {
-    static mouseEvent = ["click", "mousemove", 'mouseup', 'mousedown'];
+    static mouseEvent = ["click", "mousemove", 'mouseout', 'mouseleave', 'mouseenter', 'mouseup', 'mousedown'];
     static otherEvent = ["keydown", "keyup", "keypress"];
-    constructor(canvas, goTree, tickRate = 64) {
+    constructor(scene, goTree, tickRate = 64) {
         this.handlers = {};
         this.captureHandlers = {};
         this.tickRate = tickRate;
@@ -148,11 +149,9 @@ class Controller {
             this.captureHandlers[type] = {};
             //handle event capture and event bubble
             //mouse event handler MUST return a boolean, true to stop propagating on event chain
-            canvas.addEventListener(type, (e) => {
-                const curtick = new Date().getTime();
-                if (curtick - this.lastTick < 1000 / this.tickRate)
-                    return;
-                this.lastTick = curtick;
+            scene.canvas.addEventListener(type, (e) => {
+                if (!this.tickLimit() && (type != 'mouseleave' && type != 'mouseout' && type != 'mouseenter')) return;
+                scene.dispatchEvent(new GOEvent(type, e));
 
                 let captureHandlers = this.captureHandlers[type];
                 let handlers = this.handlers[type];
@@ -186,7 +185,9 @@ class Controller {
         for (let type of Controller.otherEvent) {
             this.handlers[type] = {};
             this.captureHandlers[type] = {};
-            canvas.addEventListener(type, (e) => {
+            scene.canvas.addEventListener(type, (e) => {
+                if (!this.tickLimit()) return;
+                scene.dispatchEvent(new GOEvent(type, e));
                 // if (type != 'mousemove')
                 //     console.log(type, e);
                 for (let handler of Object.values(this.handlers[type])) {
@@ -194,6 +195,13 @@ class Controller {
                 }
             });
         }
+    }
+    tickLimit() {
+        const curtick = new Date().getTime();
+        if (curtick - this.lastTick < 1000 / this.tickRate)
+            return false;
+        this.lastTick = curtick;
+        return true;
     }
     addCaptureHandler(type, go, handler) {
         this.captureHandlers[type][go.id] = handler;
@@ -327,19 +335,22 @@ class GOAttribute {
 }
 
 class Drawable extends GOAttribute {
-    constructor(go, x, y, width, height) {
+    constructor(go, x, y, width, height, globalCompositeOperation = '') {
         super(go);
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
+        this.globalCompositeOperation = globalCompositeOperation;
+
         this.visable = true;
         this.outOfScene = false;
     }
-    update(dt, go) {
+    update(dt) {
         if (!this.visable) return;
         this.outOfScene = !rectXRect(new Rect(this.x + this.go.x, this.y + this.go.y, this.width, this.height),
             new Rect(0, 0, this.go.scene.width, this.go.scene.height));
+
     }
 }
 
@@ -348,18 +359,18 @@ export class RectDraw extends Drawable {
         super(go, x, y, width, height);
         this.fill = fill;
 
-        go.addEventListener('resize', (e) => { return this.onResize(e); });
+        this.go.addEventListener('resize', (e) => { return this.onResize(e); });
     }
     onResize(e) {
         ({ width: this.width, height: this.height } = e.msg);
     }
-    update(dt, go) {
-        super.update(dt, go);
+    update(dt) {
+        super.update(dt);
         if (!this.visable || this.outOfScene) return;
-        const ctx = go.scene.context;
+        const ctx = this.go.scene.context;
         ctx.fillStyle = this.fill;
-        const x = go.x + this.x;
-        const y = go.y + this.y;
+        const x = this.go.x + this.x;
+        const y = this.go.y + this.y;
         ctx.fillRect(x, y, this.width, this.height);
     }
 }
@@ -371,17 +382,20 @@ export class RoundRectDraw extends Drawable {
         this.fill = fill;
         this.stroke = stroke;
 
-        go.addEventListener('resize', (e) => { return this.onResize(e); });
+        this.go.addEventListener('resize', (e) => { return this.onResize(e); });
     }
     onResize(e) {
         ({ width: this.width, height: this.height } = e.msg);
     }
-    update(dt, go) {
-        super.update(dt, go);
+    update(dt) {
+        super.update(dt);
         if (!this.visable || this.outOfScene) return;
 
-        const ctx = go.scene.context;
-        roundRect(ctx, go.x + this.x, go.y + this.y, this.width, this.height, this.radius, this.fill, this.stroke);
+        const ctx = this.go.scene.context;
+        const tmp = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = this.globalCompositeOperation;
+        roundRect(ctx, this.go.x + this.x, this.go.y + this.y, this.width, this.height, this.radius, this.fill, this.stroke);
+        ctx.globalCompositeOperation = tmp;
     }
 }
 
@@ -399,7 +413,7 @@ export class Movable extends GOAttribute {
         this.go.x = x;
         this.go.y = y;
     }
-    fixedUpdate(dt, go) {
+    fixedUpdate(dt) {
         var dx = 0,
             dy = 0;
         var vec;
@@ -417,8 +431,8 @@ export class Movable extends GOAttribute {
         for (; i >= 0; i--)
             if (this.moveList[i] < Movable.eps) this.moveList.splice(i, 1);
 
-        go.x += dx;
-        go.y += dy;
+        this.go.x += dx;
+        this.go.y += dy;
     }
 }
 
@@ -433,10 +447,10 @@ export class MouseControl extends GOAttribute {
         this.controller = controller;
         this.bubbling = bubbling
 
-        controller.addHandler('mouseup', go, (e) => { return this.onMouse(e); });
-        controller.addHandler('mousedown', go, (e) => { return this.onMouse(e); });
-        controller.addHandler('mousemove', go, (e) => { return this.onMouse(e); });
-        go.addEventListener('resize', (e) => { return this.onResize(e); });
+        controller.addHandler('mouseup', this.go, (e) => { return this.onMouse(e); });
+        controller.addHandler('mousedown', this.go, (e) => { return this.onMouse(e); });
+        controller.addHandler('mousemove', this.go, (e) => { return this.onMouse(e); });
+        this.go.addEventListener('resize', (e) => { return this.onResize(e); });
 
         this.clicked = false;
         this.dragging = false;
@@ -527,15 +541,14 @@ export class MouseControl extends GOAttribute {
 export class KeyControl extends GOAttribute {
     constructor(go, controller) {
         super(go);
-        this.go = go;
         this.controller = controller;
         this.keydown = false;
         this.keyup = false;
         this.downKey = undefined;
         this.upKey = undefined;
 
-        controller.addHandler('keydown', go, (e) => { this.onKeydown(e); return false; });
-        controller.addHandler('keyup', go, (e) => { this.onKeyup(e); return false; });
+        controller.addHandler('keydown', this.go, (e) => { this.onKeydown(e); return false; });
+        controller.addHandler('keyup', this.go, (e) => { this.onKeyup(e); return false; });
         // controller.addHandler('keypress', go, (e) => { this.onKeypress(e) });
 
     }
