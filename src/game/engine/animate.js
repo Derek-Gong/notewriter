@@ -32,7 +32,6 @@ export class Movable extends GOAttribute {
                 vec.dx -= dx;
                 vec.dy -= dy;
                 vec.dt -= t;
-                console.log(dx, dy);
             }
         }
         var i = this.moveList.length - 1;

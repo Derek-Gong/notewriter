@@ -355,7 +355,7 @@ export class MouseControl extends GOAttribute {
         controller.addHandler('mousedown', this.go, (e) => { return this.onMouse(e); });
         controller.addHandler('mousemove', this.go, (e) => { return this.onMouse(e); });
         this.go.addEventListener('resize', (e) => { return this.onResize(e); });
-        this.go.scene.addEventListener('mouseleave', (e) => { return this.onMouseLeave(e); });
+        // this.go.scene.addEventListener('mouseleave', (e) => { return this.onMouseLeave(e); });
 
         this.clicked = false;
         this.dragging = false;
@@ -398,7 +398,6 @@ export class MouseControl extends GOAttribute {
                 }
                 //check release
                 else if (this.dragging) {
-                    e.locked = false;
                     this.dragging = false;
                     this.releasing = true;
                     this.releaseX = x;
@@ -407,10 +406,14 @@ export class MouseControl extends GOAttribute {
             } else if (e.type == 'mousemove') {
                 //check dragging
                 if (this.type == 'mousedown') {
-                    e.locked = true;
                     this.dragging = true;
                     this.dragInnerX = this.offsetX - this.x - this.go.x;
                     this.dragInnerY = this.offsetY - this.y - this.go.y;
+                } else if ((e.buttons & 1) == 0) {//left button released 
+                    this.dragging = false;
+                    this.releasing = true;
+                    this.releaseX = x;
+                    this.releaseY = y;
                 }
             }
             // if (e.type != 'mousemove' || this.dragging) {
