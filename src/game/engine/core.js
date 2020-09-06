@@ -409,7 +409,7 @@ export class MouseControl extends GOAttribute {
                     this.dragging = true;
                     this.dragInnerX = this.offsetX - this.x - this.go.x;
                     this.dragInnerY = this.offsetY - this.y - this.go.y;
-                } else if ((e.buttons & 1) == 0) {//left button released 
+                } else if ((e.buttons & 1) == 0 && this.dragging) {//left button released 
                     this.dragging = false;
                     this.releasing = true;
                     this.releaseX = x;
