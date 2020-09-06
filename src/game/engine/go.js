@@ -127,6 +127,7 @@ export class ScrollBar extends GameObject {
                     this.y = Math.min(Math.max(this.slot.y, this.y), this.slot.y + this.slot.height - this.height);
                 }
 
+                // this.dispatchEvent(new GOEvent('move', this));
 
                 // }
             } else if (this.mouseControl.releasing) {
@@ -147,7 +148,6 @@ export class ScrollBar extends GameObject {
 
             this.handleMouse();
 
-            this.dispatchEvent(new GOEvent('move', this));
         }
     }
     constructor(x, y, width, height, scene, go, viewPort, axis = 'x', slotFill = 'grey', barFill = 'black') {
@@ -162,12 +162,16 @@ export class ScrollBar extends GameObject {
         this.addSon(this.slot);
         this.addSon(this.bar);
 
-        this.go.addEventListener('move', e => { return this.onGOMove(e); });
+        // this.go.addEventListener('move', e => { return this.onGOMove(e); });
         this.go.addEventListener('resize', e => { return this.onGOResize(e); });
         this.bar.addEventListener('move', e => { return this.onMove(e); });
     }
 
-    onGOMove(e) {
+    fixedUpdate(dt) {
+        super.fixedUpdate(dt);
+        this.syncBar();
+    }
+    syncBar() {
         const progress = (this.viewPort[this.axis] - this.go[this.axis]) / (this.go[this.dir] - this.viewPort[this.dir]);
         this.bar[this.axis] = this.slot[this.axis] + progress * (this.slot[this.dir] - this.bar[this.dir]);
     }

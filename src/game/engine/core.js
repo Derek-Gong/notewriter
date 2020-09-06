@@ -150,7 +150,7 @@ class Controller {
             //handle event capture and event bubble
             //mouse event handler MUST return a boolean, true to stop propagating on event chain
             scene.canvas.addEventListener(type, (e) => {
-                if (!this.tickLimit() && (type != 'mouseleave' && type != 'mouseout' && type != 'mouseenter')) return;
+                if (!this.tickLimit() && (type == 'mousemove')) return;
                 scene.dispatchEvent(new GOEvent(type, e));
 
                 let captureHandlers = this.captureHandlers[type];
@@ -243,7 +243,8 @@ export class GameObject {
         for (let i = 0; i < len; i++)
             gos[i].x = gos[i].x + dx;
         this._x = nx;
-        // this.dispatchEvent(new GOEvent('move', this));
+        if (dx != 0)
+            this.dispatchEvent(new GOEvent('move', this));
     }
     get y() { return this._y }
     set y(ny) {
@@ -253,7 +254,8 @@ export class GameObject {
         for (let i = 0; i < len; i++)
             gos[i].y = gos[i].y + dy;
         this._y = ny;
-        // this.dispatchEvent(new GOEvent('move', this));
+        if (dy != 0)
+            this.dispatchEvent(new GOEvent('move', this));
     }
 
     get width() {
@@ -273,9 +275,10 @@ export class GameObject {
     addSon(go) {
         this.sons[go.id] = go;
         go.father = this.id;
+        go.addEventListener('destroy', e => { this.removeSon(e.msg) });
         this.scene.addFather(go);
     }
-    deleteSon(go) {
+    removeSon(go) {
         delete this.sons[go.id];
         this.scene.deleteFather(go);
         go.father = null;

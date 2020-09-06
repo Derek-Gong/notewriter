@@ -1,9 +1,10 @@
 import { startGame, Settings, GameScene, GameObject, GOEvent, MouseControl, KeyControl } from './engine/core.js';
 import { GridView, ScrollBar } from './engine/go.js';
 import { RoundRectDraw } from './engine/draw.js';
-import { pointInRect, Rect } from './engine/utils.js';
+import { pointInRect, Rect, PriorityQueue, SortedSet } from './engine/utils.js';
 import * as Model from './model.js';
 import { GOMask, MouseMask } from './engine/render.js';
+import { Movable } from './engine/animate.js';
 
 //Game Implementatioin
 //
@@ -191,6 +192,7 @@ class NoteManager extends GameObject {
 
         this.mouseControl = new MouseControl(this, this.x, this.y, this.width, this.height, this.scene.controller)
         this.keyControl = new KeyControl(this, this.scene.controller);
+        this.movable = new Movable(this);
 
         this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
         this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
@@ -202,6 +204,7 @@ class NoteManager extends GameObject {
         this.scene.addEventListener('noteCreate', (e) => { return this.onNoteCreate(e); });
         this.noteList = {}
         this.genList = {}
+        this.lastNote = undefined;
     }
 
     play() {
@@ -238,6 +241,8 @@ class NoteManager extends GameObject {
                 note.play();
                 this.clearGenNotes();
                 this.genNotes();
+
+                this.move2LastNote();
             }
             this.mouseControl.reset();
         }
@@ -261,6 +266,20 @@ class NoteManager extends GameObject {
             }
         });
     }
+    move2LastNote() {
+        const ln = this.getLastNote();
+        if (ln && ln != this.lastNote) this.onLastNoteChange(new GOEvent('lastNoteChange', ln));
+        this.lastNote = ln;
+    }
+    getLastNote() {
+        let notes = Object.values(this.noteList);
+        let note = notes[0];
+        for (let i = 1; i < notes.length; i++) {
+            if (notes[i].x + notes[i].width > note.x + note.width)
+                note = notes[i];
+        }
+        return note;
+    }
     createNote(x, y, noteLen = 4) {
         let note = this.noteGrid.createNote(x, y, noteLen);
         if (note) {
@@ -283,13 +302,15 @@ class NoteManager extends GameObject {
         for (let note of notes) {
             note.destroy();
             let userNote = this.createNote(note.x, note.y, note.noteLen);
-            userNote.playInSequence(offset);
+            // userNote.playInSequence(offset);
 
             if (note.id == curNote.id)
                 break;
         }
         this.clearGenNotes();
         this.genNotes();
+
+        this.move2LastNote();
     }
     onNoteCreate(e) {
         e.msg.soundPool = this.soundPool;
@@ -299,18 +320,25 @@ class NoteManager extends GameObject {
         this.genNotes();
     }
     onNoteRemove(e) {
-        let go = e.msg;
-        if (go.id in this.noteList) {
-            delete this.noteList[go.id];
+        let note = e.msg;
+        if (note.id in this.noteList) {
+            delete this.noteList[note.id];
+
+            this.move2LastNote();
 
             this.clearGenNotes();
             this.genNotes();
         }
         else {
-            delete this.genList[go.id];
+            delete this.genList[note.id];
         }
     }
-
+    onLastNoteChange(e) {
+        const note = e.msg;
+        const dx = this.scene.width / 2 - (note.x + note.width);
+        if (0 >= this.x + dx && this.x + dx + this.width >= this.scene.width)
+            this.movable.move(dx, 0, 500);
+    }
     fixedUpdate(dt) {
         super.fixedUpdate(dt);
 
@@ -341,9 +369,7 @@ class NoteGenerator {
             notes = Object.values(Object.assign({}, noteList));
         else notes = noteList;
         let seq = this.notes2Seq(notes);
-        console.log(seq);
         return this.noteGenerator.sample(seq, seq.totalTime + 16).then(seqGen => {
-            console.log(seqGen);
             return this.seq2Notes(seqGen);
         });
     }
