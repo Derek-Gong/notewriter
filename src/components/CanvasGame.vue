@@ -6,7 +6,7 @@
 </template>
 
 <script>
-import { startNoteWriter } from "../game/gamelogic.js";
+import { startNoteWriter } from "../game/entry.js";
 export default {
   name: "CanvasGame",
   props: {

@@ -1,18 +1,17 @@
-import { startGame, Settings, GameScene, GOEvent, MouseControl, KeyControl, GridView, GameObject, RectDraw, RoundRectDraw, Movable } from './engine.js';
-import { pointInRect } from './utils.js';
+import { startGame, Settings, GameScene, GameObject, GOEvent, MouseControl, KeyControl } from './engine/core.js';
+import { GridView } from './engine/go.js';
+import { RoundRectDraw } from './engine/draw.js';
+import { pointInRect } from './engine/utils.js';
 import * as Model from './model.js';
-import { GOMask, MouseMask } from './gamerender.js';
+import { GOMask, MouseMask } from './engine/render.js';
 
 //Game Implementatioin
 //
 
 //
 
-export function startNoteWriter() {
-    startGame(new NoteWriter(new GameSettings));
-}
 
-class GameSettings extends Settings {
+export class GameSettings extends Settings {
     constructor() {
         super();
         this.soundPath = undefined;
@@ -24,7 +23,7 @@ class GameSettings extends Settings {
     }
 }
 
-class NoteWriter extends GameScene {
+export class NoteWriter extends GameScene {
     constructor(settings) {
         super(settings);
         this.userNoteManager = new UserNoteManager(0, 0, this.settings.sixtenthNoteWidth * this.settings.userNoteNum * 4, this.height, this);
@@ -415,7 +414,6 @@ class Note extends GameObject {
         // console.log(this.width, this.height);
         this.drawable = new RoundRectDraw(this, 0, 0, this.width, this.height, this.height / 2, 'black');
         this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller, true)
-        this.movable = new Movable(this);
 
         this.dragEdge = false;
         this.isGen = false;

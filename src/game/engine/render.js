@@ -1,5 +1,5 @@
-import { GameObject, RoundRectDraw, KeyControl, MouseControl } from './engine.js';
-import { pointInRect } from './utils.js';
+import { GameObject, KeyControl, MouseControl } from './core.js';
+import { RoundRectDraw } from './draw';
 
 export class GOMask extends GameObject {
     constructor(x, y, width, height, scene, go) {
