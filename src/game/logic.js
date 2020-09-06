@@ -1,7 +1,7 @@
 import { startGame, Settings, GameScene, GameObject, GOEvent, MouseControl, KeyControl } from './engine/core.js';
-import { GridView } from './engine/go.js';
+import { GridView, ScrollBar } from './engine/go.js';
 import { RoundRectDraw } from './engine/draw.js';
-import { pointInRect } from './engine/utils.js';
+import { pointInRect, Rect } from './engine/utils.js';
 import * as Model from './model.js';
 import { GOMask, MouseMask } from './engine/render.js';
 
@@ -16,9 +16,9 @@ export class GameSettings extends Settings {
         super();
         this.soundPath = undefined;
         this.noteNum = undefined;
-        this.sixtenthNoteWidth = 10;
+        this.initialSixtenthNoteWidth = 10;
         this.bpm = 120;
-        this.userNoteNum = 200;
+        this.noteNum = 200;
         this.pitchNum = 36;
     }
 }
@@ -26,9 +26,13 @@ export class GameSettings extends Settings {
 export class NoteWriter extends GameScene {
     constructor(settings) {
         super(settings);
-        this.userNoteManager = new UserNoteManager(0, 0, this.settings.sixtenthNoteWidth * this.settings.userNoteNum * 4, this.height, this);
-        // this.gridMask = new MouseMask(0, 0, 100, 100, this, this.userNoteManager.noteGrid);
-        // this.userNoteManager.layer = 1;
+        this.noteManager = new NoteManager(0, 0,
+            this.settings.initialSixtenthNoteWidth * this.settings.noteNum * 4,
+            this.height - 20,
+            this);
+        this.noteManagerScroller = new ScrollBar(0, this.noteManager.height, this.width, 20, this, this.noteManager, new Rect(0, 0, this.width, this.noteManager.height), 'x');
+        // this.gridMask = new MouseMask(0, 0, 100, 100, this, this.NoteManager.noteGrid);
+        // this.NoteManager.layer = 1;
         // this.genNoteManager = new GenNoteManager(0, 0, this.width, this.height, this);
         // this.genNoteManager.layer = 0;
     }
@@ -87,7 +91,7 @@ class NoteGird extends GridView {
     addNote(gridX, gridY, note) {
 
         note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
-        note.addEventListener('move', (e) => { return this.onNoteMove(e); });
+        note.addEventListener('release', (e) => { return this.onNoteMove(e); });
         note.addEventListener('resize', (e) => { return this.onNoteResize(e); });
 
         this.addSon(note);
@@ -181,20 +185,19 @@ class NoteGird extends GridView {
     }
 }
 
-class UserNoteManager extends GameObject {
+class NoteManager extends GameObject {
     constructor(x, y, width, height, scene) {
         super(x, y, width, height, scene);
 
         this.mouseControl = new MouseControl(this, this.x, this.y, this.width, this.height, this.scene.controller)
         this.keyControl = new KeyControl(this, this.scene.controller);
 
-        this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height, scene, this.scene.settings.userNoteNum * 4, this.scene.settings.pitchNum);
-        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height, scene, this.scene.settings.userNoteNum, this.scene.settings.pitchNum, 2);
-        this.noteGenerator = new NoteGenerator(0, 0, 0, 0, this.scene);
+        this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
+        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
         this.addSon(this.noteGrid);
         this.addSon(this.fourthNoteGrid);
-        this.addSon(this.noteGenerator);
 
+        this.noteGenerator = new NoteGenerator(this.scene);
         this.soundPool = SoundPool.getInstance();
         this.scene.addEventListener('noteCreate', (e) => { return this.onNoteCreate(e); });
         this.noteList = {}
@@ -316,9 +319,9 @@ class UserNoteManager extends GameObject {
     }
 }
 
-class NoteGenerator extends GameObject {
-    constructor(x, y, width, height, scene) {
-        super(x, y, width, height, scene);
+class NoteGenerator {
+    constructor(scene) {
+        this.scene = scene;
         this.noteGenerator = new Model.NoteGenerator()
         // this.scene.addEventListener('newNote', (e) => { return this.onNewNote(e); })
     }
@@ -510,7 +513,7 @@ class Note extends GameObject {
                     this.dispatchEvent(new GOEvent('change', this));
                     this.play();
                 } else {
-                    this.dispatchEvent(new GOEvent('move', this));
+                    this.dispatchEvent(new GOEvent('release', this));
                     this.dispatchEvent(new GOEvent('change', this));
                 }
                 this.mouseControl.reset();

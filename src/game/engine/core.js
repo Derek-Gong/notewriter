@@ -243,6 +243,7 @@ export class GameObject {
         for (let i = 0; i < len; i++)
             gos[i].x = gos[i].x + dx;
         this._x = nx;
+        // this.dispatchEvent(new GOEvent('move', this));
     }
     get y() { return this._y }
     set y(ny) {
@@ -252,6 +253,7 @@ export class GameObject {
         for (let i = 0; i < len; i++)
             gos[i].y = gos[i].y + dy;
         this._y = ny;
+        // this.dispatchEvent(new GOEvent('move', this));
     }
 
     get width() {
@@ -350,6 +352,7 @@ export class MouseControl extends GOAttribute {
         controller.addHandler('mousedown', this.go, (e) => { return this.onMouse(e); });
         controller.addHandler('mousemove', this.go, (e) => { return this.onMouse(e); });
         this.go.addEventListener('resize', (e) => { return this.onResize(e); });
+        this.go.scene.addEventListener('mouseleave', (e) => { return this.onMouseLeave(e); });
 
         this.clicked = false;
         this.dragging = false;
@@ -378,7 +381,10 @@ export class MouseControl extends GOAttribute {
             return true;
         return false;
     }
-
+    onMouseLeave(e) {
+        this.dragging = false;
+        this.releasing = false;
+    }
     onMouse(e) {
         const x = e.offsetX, y = e.offsetY;
         if (this.hitTest(x, y)) {

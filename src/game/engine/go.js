@@ -1,5 +1,6 @@
-import { GameObject } from './core';
+import { GameObject, MouseControl, GOEvent } from './core';
 import { pointInRect, Rect, drawLine } from './utils';
+import { RectDraw, RoundRectDraw } from './draw';
 
 export class GridView extends GameObject {
     constructor(x, y, width, height, scene, numX, numY, lineWidth = 1, strokeStyle = '#000000') {
@@ -69,5 +70,113 @@ export class GridView extends GameObject {
             drawLine(ctx, x1, y1, x2, y2, this.lineWidth, this.strokeStyle);
         }
 
+    }
+}
+
+//go size should greater or equal than view port's;
+export class ScrollBar extends GameObject {
+    static Slot = class extends GameObject {
+        constructor(x, y, width, height, scene, slotFill = 'grey') {
+            super(x, y, width, height, scene);
+            this.drawable = new RectDraw(this, x, y, width, height, slotFill);
+        }
+    }
+    static Bar = class extends GameObject {
+        constructor(x, y, width, height, scene, slot, go, viewPort, axis, barFill) {
+            super(x, y, width, height, scene);
+            this.axis = axis == 'x' ? 'x' : 'y';
+            this.dir = this.axis == 'x' ? 'width' : 'height';
+            this.slot = slot;
+            this.go = go;
+            this.viewPort = viewPort;
+            this[this.dir] = this[this.dir] * (this.viewPort[this.dir] / this.go[this.dir]);
+
+            this.drawable = new RoundRectDraw(this, 0, 0, this.width, this.height,
+                this.dir == 'width' ? this.height / 2 : this.width / 2,
+                barFill);
+
+            this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller);
+
+            this.addEventListener('resize', e => { return this.onResize(e); });
+        }
+
+        onResize(e) {
+            this.mouseControl.width = this.width;
+            this.mouseControl.height = this.height;
+        }
+
+        handleMouse() {
+            if (this.mouseControl.dragging) {
+                // //drag right 80% edge
+                // if (this.mouseControl.dragInnerX / this.width > 0.8) {
+                //     // if (!this.dragEdge) this.originWidth = this.width;
+                //     this.dragEdge = true;
+                // }
+
+                // if (this.dragEdge) {
+                //     this.originNoteLen = this.noteLen;
+                //     const innerX = this.mouseControl.offsetX - this.x;
+                //     this.noteLen = Math.floor(Math.max(0, Math.min(innerX, this.fourthWidth * 4 - 1)) / this.fourthWidth * 4) + 1;
+
+                // } else {
+                if (this.axis == 'x') {
+                    this.x = this.mouseControl.offsetX - this.mouseControl.dragInnerX;
+                    this.x = Math.min(Math.max(this.slot.x, this.x), this.slot.x + this.slot.width - this.width);
+                } else {
+                    this.y = this.mouseControl.offsetY - this.mouseControl.dragInnerY;
+                    this.y = Math.min(Math.max(this.slot.y, this.y), this.slot.y + this.slot.height - this.height);
+                }
+
+
+                // }
+            } else if (this.mouseControl.releasing) {
+                // if (this.dragEdge) {
+                //     this.dragEdge = false;
+                //     this.dispatchEvent(new GOEvent('change', this));
+                //     this.play();
+                // } else {
+                // this.dispatchEvent(new GOEvent('move', this));
+                //     this.dispatchEvent(new GOEvent('change', this));
+                // }
+                this.mouseControl.reset();
+            }
+        }
+
+        fixedUpdate(dt) {
+            super.fixedUpdate(dt);
+
+            this.handleMouse();
+
+            this.dispatchEvent(new GOEvent('move', this));
+        }
+    }
+    constructor(x, y, width, height, scene, go, viewPort, axis = 'x', slotFill = 'grey', barFill = 'black') {
+        super(x, y, width, height, scene);
+        this.go = go;
+        this.viewPort = viewPort;//view port rect
+        this.axis = axis == 'x' ? 'x' : 'y';
+        this.dir = this.axis == 'x' ? 'width' : 'height';
+
+        this.slot = new ScrollBar.Slot(x, y, width, height, scene, slotFill);
+        this.bar = new ScrollBar.Bar(x, y, width, height, scene, this.slot, go, viewPort, axis, barFill);
+        this.addSon(this.slot);
+        this.addSon(this.bar);
+
+        this.go.addEventListener('move', e => { return this.onGOMove(e); });
+        this.go.addEventListener('resize', e => { return this.onGOResize(e); });
+        this.bar.addEventListener('move', e => { return this.onMove(e); });
+    }
+
+    onGOMove(e) {
+        const progress = (this.viewPort[this.axis] - this.go[this.axis]) / (this.go[this.dir] - this.viewPort[this.dir]);
+        this.bar[this.axis] = this.slot[this.axis] + progress * (this.slot[this.dir] - this.bar[this.dir]);
+    }
+    onGOResize(e) {
+        this.bar[this.dir] = this.slot[this.dir] * (this.viewPort[this.dir] / this.go[this.dir]);
+        this.onGOMove(e);
+    }
+    onMove(e) {
+        const progress = (this.bar[this.axis] - this.slot[this.axis]) / (this.slot[this.dir] - this.bar[this.dir]);
+        this.go[this.axis] = this.viewPort[this.axis] - progress * (this.go[this.dir] - this.viewPort[this.dir]);
     }
 }
