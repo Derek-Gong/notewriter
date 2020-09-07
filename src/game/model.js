@@ -89,7 +89,7 @@ export class NoteGenerator {
         //length should be in beats
         let genLength = (totalLength - noteSequence.totalTime)*4;
         let inputSeq = seq2qseq(noteSequence);
-        console.log(inputSeq);
+        // console.log(inputSeq);
         // prob: no_event, note_off, 36 pitches (48-84)
         let gen = await this.model.continueSequence(inputSeq, genLength, softmaxTemp);
         if (includeOriginal) {
@@ -100,7 +100,7 @@ export class NoteGenerator {
              //slide sequence by original legnth to get actual absolute startTime
             output = qseq2seq(gen, noteSequence.totalTime);
         }
-        console.log(output);
+        // console.log(output);
         return output;
     }
 }
