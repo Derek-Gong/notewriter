@@ -2,6 +2,8 @@
   <div class='hello'>
     <h1>{{ msg }}</h1>
     <canvas id='mainStage' width='1000' height='1000' oncontextmenu='return false;' />
+    <input type='range' min='0.1' max='2.0' value='1.0' step='0.1' class='slider' id='tempRange' />
+    <span id='tempValue'>1.0</span>
   </div>
 </template>
 
@@ -24,6 +26,12 @@ export default {
   //   },
   mounted: function () {
     this.start();
+    let slider = document.getElementById("tempRange");
+    let output = document.getElementById("tempValue");
+    output.innerHTML = slider.value;
+    slider.oninput = function () {
+      output.innerHTML = this.value;
+    };
   },
   //   mounted() {
   //     let recaptchaScript = document.createElement("script");
