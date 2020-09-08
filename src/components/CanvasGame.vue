@@ -1,7 +1,7 @@
 <template>
   <div class='hello'>
     <h1>{{ msg }}</h1>
-    <canvas id='mainStage' width='1000' height='1000' />
+    <canvas id='mainStage' width='1000' height='1000' oncontextmenu='return false;' />
   </div>
 </template>
 

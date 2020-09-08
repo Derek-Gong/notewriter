@@ -11,7 +11,6 @@ export class Movable extends GOAttribute {
         this.moveList = [];
     }
     move(dx, dy, dt) {
-        console.log(dx);
         this.moveList.push({ dx: dx, dy: dy, dt: dt });
     }
     moveTo(x, y) {

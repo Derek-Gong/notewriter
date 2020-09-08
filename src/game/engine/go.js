@@ -1,4 +1,5 @@
-import { GameObject, MouseControl, GOEvent } from './core';
+import { GameObject, GOEvent } from './core';
+import { MouseControl } from './controller';
 import { pointInRect, Rect, drawLine } from './utils';
 import { RectDraw, RoundRectDraw } from './draw';
 
