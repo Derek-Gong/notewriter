@@ -69,11 +69,11 @@ export class NoteGenerator {
         this.model.initialize();
     }
 
-    async generate(inputNoteSequence, num_seq=8){
+    async generate(inputNoteSequence, totalLength=16.0, num_seq=8){
         //generate multiple sequences and sort them
         let seqArr = [];
         for (let i = 0; i < num_seq; i++){
-            let seq = await this.sample(inputNoteSequence);
+            let seq = await this.sample(inputNoteSequence, totalLength);
             console.log('generated sample');
             // let contour = melContour(seq);
             // contourArr.push(contour);
@@ -83,8 +83,10 @@ export class NoteGenerator {
         return seqArr;
     }
 
-    async sample(noteSequence, totalLength=16.0, softmaxTemp=1.5, includeOriginal=false){
+    async sample(noteSequence, totalLength=16.0, includeOriginal=false){
         let output;
+        let slider = document.getElementById("tempRange");
+        let softmaxTemp = parseFloat(slider.value);
         if (noteSequence.notes.length == 0) return noteSequence;
         //length should be in beats
         let genLength = (totalLength - noteSequence.totalTime)*4;
