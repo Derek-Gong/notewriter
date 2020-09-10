@@ -69,11 +69,11 @@ export class NoteGenerator {
         this.model.initialize();
     }
 
-    async generate(inputNoteSequence, totalLength=16.0, num_seq=8){
+    async sortedGenerate(noteSequence, totalLength=16.0, num_seq=8){
         //generate multiple sequences and sort them
         let seqArr = [];
         for (let i = 0; i < num_seq; i++){
-            let seq = await this.sample(inputNoteSequence, totalLength);
+            let seq = await this.sample(noteSequence, totalLength);
             console.log('generated sample');
             // let contour = melContour(seq);
             // contourArr.push(contour);
@@ -83,7 +83,7 @@ export class NoteGenerator {
         return seqArr;
     }
 
-    async sample(noteSequence, totalLength=16.0, includeOriginal=false){
+    async sample(noteSequence, totalLength=16.0, includeOriginal=false, delay=true){
         let output;
         let slider = document.getElementById("tempRange");
         let softmaxTemp = parseFloat(slider.value);
@@ -100,7 +100,8 @@ export class NoteGenerator {
         }
         else {
              //slide sequence by original legnth to get actual absolute startTime
-            output = qseq2seq(gen, noteSequence.totalTime);
+            if (delay) output = qseq2seq(gen, noteSequence.totalTime);
+            else output = qseq2seq(gen)
         }
         // console.log(output);
         return output;
