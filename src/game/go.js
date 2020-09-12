@@ -7,6 +7,7 @@ import * as Model from './model.js';
 import { GOMask, MouseMask } from './engine/render.js';
 import { Movable } from './engine/animate.js';
 import { PianoSoundPool } from './engine/sound.js';
+import { NoteSuggester } from './suggestion.js';
 
 export class NoteGird extends GridView {
     constructor(x, y, width, height, scene, numX, numY) {
@@ -163,8 +164,8 @@ export class NoteManager extends GameObject {
         this.keyControl = new KeyControl(this, this.scene.controller);
         this.movable = new Movable(this);
 
-        this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
-        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
+        this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height*0.6, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
+        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height*0.6, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
         this.addSon(this.noteGrid);
         this.addSon(this.fourthNoteGrid);
 
@@ -174,6 +175,10 @@ export class NoteManager extends GameObject {
         this.noteList = {}
         this.genList = {}
         this.lastNote = undefined;
+        
+        //suggestor
+        this.suggester = new NoteSuggester(this.x, this.y+this.height*0.6+20, this.width, this.height/3, scene, this.soundPool, 6, 16, this.noteGenerator);
+        this.addSon(this.suggester);
     }
 
     play() {
@@ -220,6 +225,8 @@ export class NoteManager extends GameObject {
         for (let note of Object.values(this.genList))
             note.destroy();
         this.genList = {};
+        //clear notes from suggester
+        this.suggester.clearNotes()
     }
     genNotes() {
         this.noteGenerator.sample(this.noteList).then(genList => {
@@ -235,6 +242,8 @@ export class NoteManager extends GameObject {
                 } else note.destroy();
             }
         });
+        // add notes to suggester as well
+        this.suggester.updateNotes(this.noteList);
     }
     move2LastNote() {
         const ln = this.getLastNote();
