@@ -2,8 +2,8 @@ import { Settings, GameScene, GOEvent } from './engine/core.js';
 import { Rect } from './engine/utils.js';
 import { ScrollBar } from './engine/go.js';
 import { PianoSoundPool } from './engine/sound.js';
-import { NoteManager, NoteGenerator } from './go.js';
-import { NoteSuggester } from './suggestion.js';
+import { NoteManager, NoteSuggester } from './go/managers.js';
+import { NoteGenerator } from './go/helpers.js';
 //Game Implementatioin
 //
 
