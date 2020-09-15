@@ -3,11 +3,12 @@ import { MouseControl, KeyControl } from './engine/controller.js';
 import { GridView, ScrollBar } from './engine/go.js';
 import { RoundRectDraw } from './engine/draw.js';
 import { pointInRect, Rect, PriorityQueue, SortedSet } from './engine/utils.js';
-import * as Model from './model.js';
+import * as Model from './model/model.js';
 import { GOMask, MouseMask } from './engine/render.js';
 import { Movable } from './engine/animate.js';
 import { PianoSoundPool } from './engine/sound.js';
 import { NoteSuggester } from './suggestion.js';
+import Worker from 'worker-loader!./model/worker.js';
 
 export class NoteGird extends GridView {
     constructor(x, y, width, height, scene, numX, numY) {
@@ -173,7 +174,27 @@ export class NoteManager extends GameObject {
         this.addSon(this.fourthNoteGrid);
         this.addSon(this.notePlayer);
 
-        // this.scene.addEventListener('noteCreate', (e) => { return this.onNoteCreate(e); });
+        this.worker = new Worker();
+        this.worker.onmessage = (event) => {
+            if (event.data.fyi) {
+                console.log(event.data.fyi);
+            } else if (event.data.origin == 'NM') {
+                const genSeq = event.data.seq;
+                let notes = this.noteGenerator.seq2Notes(genSeq);
+                this.clearGenNotes();
+                this.placeNotes(notes);
+            } else if (event.data.origin.startsWith('NS')) {
+                const genSeq = event.data.seq;
+                let notes = this.noteGenerator.seq2Notes(genSeq);
+
+                let index = parseInt(event.data.origin.slice(-1));
+                this.suggester.clearNotes(index);
+                this.suggester.placeNotes(index, notes);
+            }
+        }
+        //dummy message to initialize model
+        this.worker.postMessage({ init: 'init' });
+
         this.noteList = {}
         this.genList = {}
         this.lastNote = undefined;
@@ -214,7 +235,7 @@ export class NoteManager extends GameObject {
                 this.dispatchEvent(new GOEvent('newNote', this.noteList));
 
                 note.play();
-                this.clearGenNotes();
+                // this.clearGenNotes();
                 this.genNotes();
 
                 this.move2LastNote();
@@ -226,23 +247,22 @@ export class NoteManager extends GameObject {
         for (let note of Object.values(this.genList))
             note.destroy();
         this.genList = {};
-        //clear notes from suggester
-        this.suggester.clearNotes()
+    }
+    placeNotes(genList) {
+        //called upon onmessage from worker
+        for (let note of genList) {
+            if (this.noteGrid.placeNote(note)) {
+                note.drawable.fill = 'green';
+                note.isGen = true;
+                note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
+                note.addEventListener('genSelect', (e) => { return this.onGenNoteSelect(e); });
+                note.addEventListener('genPlay', (e) => { return this.onGenNotePlay(e); });
+                this.genList[note.id] = note;
+            } else note.destroy();
+        }
     }
     genNotes() {
-        this.noteGenerator.sample(this.noteList).then(genList => {
-            for (let note of genList) {
-                if (this.noteGrid.placeNote(note)) {
-                    note.drawable.fill = 'green';
-                    note.isGen = true;
-                    note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
-                    note.addEventListener('genSelect', (e) => { return this.onGenNoteSelect(e); });
-                    note.addEventListener('genPlay', (e) => { return this.onGenNotePlay(e); });
-
-                    this.genList[note.id] = note;
-                } else note.destroy();
-            }
-        });
+        this.noteGenerator.sample(this.noteList, 'NM');
         // add notes to suggester as well
         this.suggester.updateNotes(this.noteList);
     }
@@ -287,7 +307,7 @@ export class NoteManager extends GameObject {
             if (note.id == curNote.id)
                 break;
         }
-        this.clearGenNotes();
+        // this.clearGenNotes();
         this.genNotes();
 
         this.move2LastNote();
@@ -310,7 +330,7 @@ export class NoteManager extends GameObject {
     //     e.msg.soundPool = this.soundPool;
     // }
     onNoteChange(e) {
-        this.clearGenNotes();
+        // this.clearGenNotes();
         this.genNotes();
     }
     onNoteRemove(e) {
@@ -320,7 +340,7 @@ export class NoteManager extends GameObject {
 
             this.move2LastNote();
 
-            this.clearGenNotes();
+            // this.clearGenNotes();
             this.genNotes();
         }
         else {
@@ -345,32 +365,19 @@ export class NoteManager extends GameObject {
 }
 
 class NoteGenerator {
-    constructor(scene) {
+    constructor(scene, worker) {
         this.scene = scene;
-        this.noteGenerator = new Model.NoteGenerator()
-        // this.scene.addEventListener('newNote', (e) => { return this.onNewNote(e); })
+        this.worker = worker;
+        this.curMessageID = 0;
     }
-    // onNewNote(e) {
-    //     let noteList = e.msg;
-    //     let seq = this.notes2Seq(noteList);
-    //     seq = this.noteGenerator.sample(seq);
-
-    //     this.noteGrid.clear();
-    //     this.noteList = {};
-
-    //     this.seq2Notes(seq);
-    // }
-    sample(noteList) {
-        let notes;
-        if (noteList instanceof Object)
-            notes = Object.values(Object.assign({}, noteList));
-        else notes = noteList;
-        let seq = this.notes2Seq(notes);
-        return this.noteGenerator.sample(seq, seq.totalTime + 16).then(seqGen => {
-            return this.seq2Notes(seqGen);
-        });
+    sample(notes, messageOrigin = 'NM', delay = true) {
+        // can't send Notes object, convert to NoteSequence first
+        let inputSeq = this.notes2Seq(notes);
+        this.worker.postMessage({ seq: inputSeq, origin: messageOrigin, delay: delay });
     }
     notes2Seq(notes) {
+        if (notes instanceof Object)
+            notes = Object.values(Object.assign({}, notes));
         notes.sort((a, b) => {
             return a.startTime - b.startTime;
         });
@@ -408,7 +415,6 @@ export class Note extends GameObject {
         this.noteLen = noteLen;//num of sixteenth note
         this.bpm = bpm;
         this.soundPool = soundPool;
-        // console.log(this.width, this.height);
         this.drawable = new RoundRectDraw(this, 0, 0, this.width, this.height, this.height / 2, 'black');
         this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller, true)
 
