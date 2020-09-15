@@ -2,8 +2,8 @@ import { pointInRect, drawLine, Rect, roundRect, rectXRect } from './utils.js'
 export class Settings {
     constructor() {
         this.canvasName = "mainStage";
-        this.canvasWidth = 1280;
-        this.canvasHeight = 720;
+        this.canvasWidth = 1920;
+        this.canvasHeight = 1080;
 
         this.fps = 60;
         this.tickRate = 64;

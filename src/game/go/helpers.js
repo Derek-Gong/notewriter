@@ -72,9 +72,9 @@ export class NoteGenerator extends GameObject {
 
 
 export class NotePlayer extends GameObject {
-    constructor(scene, bmp, soundPool) {
+    constructor(scene, bpm, soundPool) {
         super(0, 0, 0, 0, scene);
-        this.bmp = bmp;
+        this.bpm = bpm;
         this.soundPool = soundPool;
         this.playing = false;
         this.startTime = 0;
@@ -84,7 +84,7 @@ export class NotePlayer extends GameObject {
     }
     get progress() {
         if (this.playing)
-            return (this.curTime - this.starTime) / (this.endTime - this.starTime);
+            return (this.curTime - this.startTime) / (this.endTime - this.startTime);
         return -1;
     }
     playNotes(notes, startTime = 0, endTime = Number.MAX_VALUE) {
@@ -93,12 +93,11 @@ export class NotePlayer extends GameObject {
 
         this.notes = Array.from(notes);
         this.notes.sort((a, b) => { return a.startTime - b.startTime; });
-        this.startTime = Math.max(startTime, this.notes[0].starTime);
         let end = -1;
         let firstNode = -1, lastNote = -1;
         for (let i = 0; i < notes.length; i++) {
             let note = notes[i];
-            if (this.startTime <= note.startTime && note.startTime < this.endTime) {
+            if (startTime <= note.startTime && note.startTime < endTime) {
                 if (firstNode < 0)
                     firstNode = i;
                 if (note.endTime > end) {
@@ -107,16 +106,17 @@ export class NotePlayer extends GameObject {
                 }
             }
         }
+        this.startTime = startTime;
         this.endTime = Math.min(endTime, end);
-
         for (let i = firstNode; i <= lastNote; i++) {
             let note = notes[i];
             setTimeout(() => {
-                this.curTime = note.starTime;
+                this.curTime = note.startTime;
                 if (i == firstNode) {
                     this.dispatchEvent(new GOEvent('startPlay', this.startTime));
                 }
-                this.soundPool.play(note.pitch, 60 * 1000 / this.bpm * (Math.min(this.endTime, note.endTime) - note.startTime));
+                note.play()
+                // this.soundPool.play(note.pitch, 60 * 1000 / this.bpm * (Math.min(this.endTime, note.endTime) - note.startTime));
                 this.curTime = Math.min(this.endTime, note.endTime);
                 if (i == lastNote)
                     this.dispatchEvent(new GOEvent('endPlay', this.curTime));

@@ -43,15 +43,16 @@ export class NoteManager extends GameObject {
             if (this.keyControl.downKey == 39) {
                 this.x += 5;
             }
+            this.keyControl.reset();
         }
         if (this.keyControl.keyup) {
             //Space key
             if (this.keyControl.upKey == 32) {
                 this.play();
             }
+            this.keyControl.reset();
         }
 
-        this.keyControl.reset();
     }
 
     handleMouse() {
@@ -174,10 +175,8 @@ export class NoteManager extends GameObject {
     onLastNoteChange(e) {
         const note = e.msg;
         let dx = this.scene.width / 2 - (note.x + note.width);
-        console.log(note.x);
         // if (0 >= this.x + dx && this.x + dx + this.width >= this.scene.width)
         dx = Math.max(Math.min(dx, -this.x), this.scene.width - this.width - this.x);
-        console.log(dx);
         this.movable.move(dx, 0, 500);
     }
     fixedUpdate(dt) {
@@ -231,7 +230,6 @@ export class NoteSuggester extends GameObject {
         for (let i = 0; i < self.genNum; i++)
             this.clearNotes(i);
         let notesArr = e.msg;
-        console.log(notesArr)
         if (notesArr.length < 1) return;
         this.notesArr = Array.from(notesArr);
         this.selectIndex = notesArr.length / 2;
