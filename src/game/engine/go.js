@@ -108,18 +108,6 @@ export class ScrollBar extends GameObject {
 
         handleMouse() {
             if (this.mouseControl.dragging) {
-                // //drag right 80% edge
-                // if (this.mouseControl.dragInnerX / this.width > 0.8) {
-                //     // if (!this.dragEdge) this.originWidth = this.width;
-                //     this.dragEdge = true;
-                // }
-
-                // if (this.dragEdge) {
-                //     this.originNoteLen = this.noteLen;
-                //     const innerX = this.mouseControl.offsetX - this.x;
-                //     this.noteLen = Math.floor(Math.max(0, Math.min(innerX, this.fourthWidth * 4 - 1)) / this.fourthWidth * 4) + 1;
-
-                // } else {
                 if (this.axis == 'x') {
                     this.x = this.mouseControl.offsetX - this.mouseControl.dragInnerX;
                     this.x = Math.min(Math.max(this.slot.x, this.x), this.slot.x + this.slot.width - this.width);
@@ -127,19 +115,7 @@ export class ScrollBar extends GameObject {
                     this.y = this.mouseControl.offsetY - this.mouseControl.dragInnerY;
                     this.y = Math.min(Math.max(this.slot.y, this.y), this.slot.y + this.slot.height - this.height);
                 }
-
-                // this.dispatchEvent(new GOEvent('move', this));
-
-                // }
             } else if (this.mouseControl.releasing) {
-                // if (this.dragEdge) {
-                //     this.dragEdge = false;
-                //     this.dispatchEvent(new GOEvent('change', this));
-                //     this.play();
-                // } else {
-                // this.dispatchEvent(new GOEvent('move', this));
-                //     this.dispatchEvent(new GOEvent('change', this));
-                // }
                 this.mouseControl.reset();
             }
         }
@@ -163,7 +139,6 @@ export class ScrollBar extends GameObject {
         this.addSon(this.slot);
         this.addSon(this.bar);
 
-        // this.go.addEventListener('move', e => { return this.onGOMove(e); });
         this.go.addEventListener('resize', e => { return this.onGOResize(e); });
         this.bar.addEventListener('move', e => { return this.onMove(e); });
     }
@@ -183,5 +158,84 @@ export class ScrollBar extends GameObject {
     onMove(e) {
         const progress = (this.bar[this.axis] - this.slot[this.axis]) / (this.slot[this.dir] - this.bar[this.dir]);
         this.go[this.axis] = this.viewPort[this.axis] - progress * (this.go[this.dir] - this.viewPort[this.dir]);
+    }
+}
+
+export class Slider extends GameObject {
+    static Slot = class extends GameObject {
+        constructor(x, y, width, height, scene, slotStroke = 'grey') {
+            super(x, y, width, height, scene);
+            this.drawable = new RoundRectDraw(this, 0, 0, width, height, height / 2, false, slotStroke);
+
+        }
+    }
+    static Knob = class extends GameObject {
+        constructor(x, y, width, height, scene, slot, axis, knobFill = 'blue') {
+            super(x, y, width, height, scene);
+            this.axis = axis == 'x' ? 'x' : 'y';
+            this.dir = this.axis == 'x' ? 'width' : 'height';
+            this.slot = slot;
+
+            this.drawable = new RoundRectDraw(this, 0, 0, this.width, this.height,
+                this.dir == 'width' ? this.height / 2 : this.width / 2,
+                knobFill);
+
+            this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller);
+
+        }
+
+        handleMouse() {
+            if (this.mouseControl.dragging) {
+                if (this.axis == 'x') {
+                    let x = this.mouseControl.offsetX - this.mouseControl.dragInnerX;
+                    this.x = Math.min(Math.max(this.slot.x, x), this.slot.x + this.slot.width - this.width);
+                } else {
+                    let y = this.mouseControl.offsetY - this.mouseControl.dragInnerY;
+                    this.y = Math.min(Math.max(this.slot.y, y), this.slot.y + this.slot.height - this.height);
+                }
+            } else if (this.mouseControl.releasing) {
+                this.mouseControl.reset();
+            }
+        }
+
+        fixedUpdate(dt) {
+            super.fixedUpdate(dt);
+
+            this.handleMouse();
+
+        }
+    }
+    constructor(x, y, width, height, scene, valSetter, valGetter = false, axis = 'x', slotStroke = 'grey', knobFill = 'black') {
+        super(x, y, width, height, scene);
+        this.valGetter = valGetter;
+        this.valSetter = valSetter;
+        this.axis = axis == 'x' ? 'x' : 'y';
+        this.dir = this.axis == 'x' ? 'width' : 'height';
+        this.progress = 0.5;
+
+        this.slot = new Slider.Slot(x, y, width, height, scene, slotStroke);
+        const diameter = this[this.dir == 'width' ? 'height' : 'width'] * 2;
+        this.knob = new Slider.Knob(x, y, diameter, diameter, scene, this.slot, axis, knobFill);
+        this.knob[this.axis == 'x' ? 'y' : 'x'] -= this[this.dir == 'width' ? 'height' : 'width'] * 0.5;
+        console.log(this.slot)
+        this.addSon(this.slot);
+        this.addSon(this.knob);
+
+        this.knob.addEventListener('move', e => { return this.onMove(e); });
+    }
+
+    fixedUpdate(dt) {
+        super.fixedUpdate(dt);
+        this.syncKnob();
+    }
+    syncKnob() {
+        if (this.valGetter) {
+            this.progress = this.valGetter();
+        }
+        this.knob[this.axis] = this.slot[this.axis] + this.progress * (this.slot[this.dir] - this.knob[this.dir]);
+    }
+    onMove(e) {
+        this.progress = (this.knob[this.axis] - this.slot[this.axis]) / (this.slot[this.dir] - this.knob[this.dir]);
+        this.valSetter(this.progress);
     }
 }

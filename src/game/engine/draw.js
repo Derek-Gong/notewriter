@@ -4,7 +4,7 @@ import { GOAttribute } from './core.js';
 import { rectXRect, Rect, roundRect } from './utils';
 
 class Drawable extends GOAttribute {
-    constructor(go, x, y, width, height, globalCompositeOperation = '') {
+    constructor(go, x, y, width, height, globalCompositeOperation = undefined) {
         super(go);
         this.x = x;
         this.y = y;
@@ -62,8 +62,50 @@ export class RoundRectDraw extends Drawable {
 
         const ctx = this.go.scene.context;
         const tmp = ctx.globalCompositeOperation;
-        ctx.globalCompositeOperation = this.globalCompositeOperation;
+        if (this.globalCompositeOperation)
+            ctx.globalCompositeOperation = this.globalCompositeOperation;
+
         roundRect(ctx, this.go.x + this.x, this.go.y + this.y, this.width, this.height, this.radius, this.fill, this.stroke);
+
         ctx.globalCompositeOperation = tmp;
+    }
+}
+
+export class TextDraw extends Drawable {
+    constructor(go, x, y, width, height, text, font, fill = 'black', stroke = false) {
+        super(go, x, y, width, height);
+        this.text = text;
+        this.font = font;
+        this.fill = fill;
+        this.stroke = stroke;
+
+        this.go.addEventListener('resize', (e) => { return this.onResize(e); });
+    }
+    onResize(e) {
+        ({ width: this.width, height: this.height } = e.msg);
+    }
+    update(dt) {
+        super.update(dt);
+        if (!this.visable || this.outOfScene) return;
+
+        const ctx = this.go.scene.context;
+        const tmp = ctx.globalCompositeOperation;
+        if (this.globalCompositeOperation)
+            ctx.globalCompositeOperation = this.globalCompositeOperation;
+
+        this.draw(ctx)
+
+        ctx.globalCompositeOperation = tmp;
+    }
+    draw(ctx) {
+        ctx.font = this.font;
+        if (this.fill) {
+            ctx.fillStyle = this.fill;
+            ctx.fillText(this.text, this.go.x + this.x, this.go.y + this.y, this.width);
+        } else if (this.stroke) {
+            ctx.strokeStyle = this.fill;
+            ctx.strokeText(this.text, this.go.x + this.x, this.go.y + this.y, this.width);
+        }
+
     }
 }
