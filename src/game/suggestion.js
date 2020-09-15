@@ -1,7 +1,5 @@
-import * as Model from './model.js';
-import { startGame, Settings, GameScene, GameObject, GOEvent } from './engine/core.js';
-import { NoteGird, NoteManager, Note } from './go.js'
-import { Movable } from './engine/animate.js';
+import { GameObject } from './engine/core.js';
+import { NoteGird } from './go.js'
 import { MouseControl, KeyControl } from './engine/controller.js';
 
 export class NoteSuggester extends GameObject {
@@ -17,7 +15,7 @@ export class NoteSuggester extends GameObject {
     this.keyControl = new KeyControl(this, this.scene.controller);
 
     this.soundPool = soundPool;
-    this.noteGenerator = noteGenerator.noteGenerator; // Model.NoteGenerator
+    this.noteGenerator = noteGenerator; // go.NoteGenerator
     this.noteLists = [];//nested array to keep generated notes
     this.noteGrids = [];
     let posX;
@@ -42,53 +40,17 @@ export class NoteSuggester extends GameObject {
     }
   }
 
-  clearNotes(){
+  clearNotes(index){
+    for (let note of this.noteLists[index]) {
+      note.destroy();
+    }
+    this.noteLists[index] = [];
+  }
+
+  updateNotes(inputNotes) {
     for (let i = 0; i < self.genNum; i++){
-      for (let note of this.noteLists[i]) {
-        note.destroy();
-      }
-      this.noteLists[i] = [];
+      this.noteGenerator.sample(inputNotes, 'NS_'+i.toString(), false);
     }
-  }
-
-  async updateNotes(inputNotes) {
-    let notes;
-    if (inputNotes instanceof Object)
-      notes = Object.values(Object.assign({}, inputNotes));
-    else notes = inputNotes;
-
-    let seq = this.notes2Seq(notes);
-    for (let i = 0; i < self.genNum; i++){
-      this.noteGenerator.sample(seq, seq.totalTime + 16, false, false).then(
-        seqGen => {
-          let genList = this.seq2Notes(seqGen);
-          this.placeNotes(i, genList);
-        }
-      );
-    }
-    console.log(this.noteLists[0]);
-  }
-
-  notes2Seq(notes) {
-    notes.sort((a, b) => {
-        return a.startTime - b.startTime;
-    });
-    let totalTime = 0;
-    for (let i = notes.length - 1; i >= 0; i--) {
-        let note = notes[i];
-        notes[i] = new Model.Note(note.pitch, note.startTime, note.startTime + note.duration);
-        totalTime = Math.max(totalTime, notes[i].endTime);
-    }
-    return new Model.NoteSequence(totalTime, this.bpm, notes);
-  }
-
-  seq2Notes(seq) {
-    let notes = seq.notes;
-    for (let i = notes.length - 1; i >= 0; i--) {
-        let note = notes[i];
-        notes[i] = new Note(0, 0, 0, 0, this.scene, note.pitch, 0, note.startTime, Math.round((note.endTime - note.startTime) * 4), 0);
-    }
-    return notes;
   }
 
   handleMouse() {
@@ -98,8 +60,8 @@ export class NoteSuggester extends GameObject {
   }
   handleKey() {
     if (this.keyControl.keyup) {
-        //Space key
-        let keynum = this.keyControl.upKey
+      let keynum = this.keyControl.upKey;
+      //0-9
         if (keynum >= 48 && this.keyControl.upKey <=57 ) {
             this.play(keynum-48);
         }

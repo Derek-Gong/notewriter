@@ -62,50 +62,42 @@ export class NoteSequence {
     }
 }
 
-export class NoteGenerator {
-    constructor() { 
-        const weight_url = "https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/basic_rnn";
-        this.model = new mm.MusicRNN(weight_url);
-        this.model.initialize();
+async function sortedGenerate(model, noteSequence, totalLength=16.0, num_seq=8){
+    //generate multiple sequences and sort them
+    let seqArr = [];
+    for (let i = 0; i < num_seq; i++){
+        let seq = await sample(model, noteSequence, totalLength);
+        console.log('generated sample');
+        // let contour = melContour(seq);
+        // contourArr.push(contour);
+        seqArr.push(seq);
     }
+    seqArr.sort((a,b) => melContour(b) - melContour(a)); //ascending to descending
+    return seqArr;
+}
 
-    async sortedGenerate(noteSequence, totalLength=16.0, num_seq=8){
-        //generate multiple sequences and sort them
-        let seqArr = [];
-        for (let i = 0; i < num_seq; i++){
-            let seq = await this.sample(noteSequence, totalLength);
-            console.log('generated sample');
-            // let contour = melContour(seq);
-            // contourArr.push(contour);
-            seqArr.push(seq);
-        }
-        seqArr.sort((a,b) => melContour(b) - melContour(a)); //ascending to descending
-        return seqArr;
+async function sample(model, noteSequence, totalLength=16.0, includeOriginal=false, delay=true){
+    let output;
+    let slider = document.getElementById("tempRange");
+    let softmaxTemp = parseFloat(slider.value);
+    if (noteSequence.notes.length == 0) return noteSequence;
+    //length should be in beats
+    let genLength = (totalLength - noteSequence.totalTime)*4;
+    let inputSeq = seq2qseq(noteSequence);
+    // console.log(inputSeq);
+    // prob: no_event, note_off, 36 pitches (48-84)
+    let gen = await model.continueSequence(inputSeq, genLength, softmaxTemp);
+    if (includeOriginal) {
+        gen = mm.sequences.concatenate([inputSeq, gen]);
+        output = qseq2seq(gen);
     }
-
-    async sample(noteSequence, totalLength=16.0, includeOriginal=false, delay=true){
-        let output;
-        let slider = document.getElementById("tempRange");
-        let softmaxTemp = parseFloat(slider.value);
-        if (noteSequence.notes.length == 0) return noteSequence;
-        //length should be in beats
-        let genLength = (totalLength - noteSequence.totalTime)*4;
-        let inputSeq = seq2qseq(noteSequence);
-        // console.log(inputSeq);
-        // prob: no_event, note_off, 36 pitches (48-84)
-        let gen = await this.model.continueSequence(inputSeq, genLength, softmaxTemp);
-        if (includeOriginal) {
-            gen = mm.sequences.concatenate([inputSeq, gen]);
-            output = qseq2seq(gen);
-        }
-        else {
-             //slide sequence by original legnth to get actual absolute startTime
-            if (delay) output = qseq2seq(gen, noteSequence.totalTime);
-            else output = qseq2seq(gen)
-        }
-        // console.log(output);
-        return output;
+    else {
+         //slide sequence by original legnth to get actual absolute startTime
+        if (delay) output = qseq2seq(gen, noteSequence.totalTime);
+        else output = qseq2seq(gen)
     }
+    // console.log(output);
+    return output;
 }
 
 function melContour(mel){

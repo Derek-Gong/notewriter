@@ -3,7 +3,6 @@ import { MouseControl, KeyControl } from './engine/controller.js';
 import { GridView, ScrollBar } from './engine/go.js';
 import { RoundRectDraw } from './engine/draw.js';
 import { pointInRect, Rect, PriorityQueue, SortedSet } from './engine/utils.js';
-import * as Model from './model.js';
 import { GOMask, MouseMask } from './engine/render.js';
 import { Movable } from './engine/animate.js';
 import { PianoSoundPool } from './engine/sound.js';
