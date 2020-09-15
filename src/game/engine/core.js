@@ -33,24 +33,41 @@ class MainLoop {
         this.looping = undefined;
     }
     start() {
-        this.looping = setInterval(() => this.loopOnce(), this.dt);
+        this.logicLooping = setInterval(() => this.logicLoop(), this.dt);
+        this.drawLooping = setInterval(() => this.drawLoop(), this.dt);
     }
     pause() {
-        if (this.looping) clearInterval(this.looping);
+        if (this.drawLooping) clearInterval(this.drawLooping);
     }
     end() {
-        if (this.looping) clearInterval(this.looping);
+        if (this.drawLooping) {
+            clearInterval(this.drawLooping);
+            clearInterval(this.drawLooping);
+        }
         this.scene.end();
     }
-    loopOnce() {
+    logicLoop() {
+        let dt = this.lastLogicTime ? new Date().getTime() - this.lastLogicTime : this.dt;
+
+        const events = Array.from(this.scene.eventQueue);
+        for (let e of events) {
+            e();
+            this.scene.eventQueue.shift();
+        }
+        for (let go of Object.values(this.scene.goList)) go.fixedUpdate(dt);
+
+        this.lastLogicTime = new Date().getTime();
+    }
+    drawLoop() {
+        let dt = this.lastDrawTime ? new Date().getTime() - this.lastDrawTime : this.dt;
+
         this.scene.clear();
-
-        for (let go of Object.values(this.scene.goList)) go.fixedUpdate(this.dt);
-
         let gos = Object.values(this.scene.goList).sort((a, b) => {
             return a.layer - b.layer;
         })
-        for (let go of gos) go.update(this.dt);
+        for (let go of gos) go.update(dt);
+
+        this.lastDrawTime = new Date().getTime();
     }
 }
 //Manage Canvas
@@ -83,6 +100,7 @@ export class GameScene {
         this.goList = {};
         this.goTree = { 'roots': {} };
         this.eventListeners = {};
+        this.eventQueue = [];
 
         this.controller = new Controller(this, this.goTree, this.settings.tickRate);
     }
@@ -123,12 +141,13 @@ export class GameScene {
             this.eventListeners[type] = [];
         this.eventListeners[type].push(listener);
     }
-    async dispatchEvent(event) {
+    dispatchEvent(event) {
         if (!(event instanceof GOEvent))
             throw 'wrong scene event type';
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
-                listener(event);
+                this.eventQueue.push(() => { listener(event) });
+        // listener(event)
     }
     clear() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -299,23 +318,24 @@ export class GameObject {
     //Handle game logic
     fixedUpdate(dt) {
         for (let attr of this.attributes)
-            if (attr.fixedUpdate) attr.fixedUpdate(dt, this);
+            if (attr.fixedUpdate) attr.fixedUpdate(dt);
     }
     //Handle graphics
     update(dt) {
-        for (let attr of this.attributes) if (attr.update) attr.update(dt, this);
+        for (let attr of this.attributes) if (attr.update) attr.update(dt);
     }
     addEventListener(type, listener) {
         if (!(type in this.eventListeners))
             this.eventListeners[type] = [];
         this.eventListeners[type].push(listener);
     }
-    async dispatchEvent(event) {
+    dispatchEvent(event) {
         if (!(event instanceof GOEvent))
             throw 'wrong go event type from', this;
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
-                listener(event);
+                this.scene.eventQueue.push(() => { listener(event) });
+        // listener(event)
 
         this.scene.dispatchEvent(event);
     }

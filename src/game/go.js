@@ -164,26 +164,27 @@ export class NoteManager extends GameObject {
         this.keyControl = new KeyControl(this, this.scene.controller);
         this.movable = new Movable(this);
 
-        this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height*0.6, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
-        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height*0.6, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
+        this.noteGenerator = new NoteGenerator(this.scene);
+
+        this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height * 0.6, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
+        this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height * 0.6, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
+        this.notePlayer = new NotePlayer(scene, this.scene.settings.bpm, PianoSoundPool.getInstance());
         this.addSon(this.noteGrid);
         this.addSon(this.fourthNoteGrid);
+        this.addSon(this.notePlayer);
 
-        this.noteGenerator = new NoteGenerator(this.scene);
-        this.soundPool = PianoSoundPool.getInstance();
-        this.scene.addEventListener('noteCreate', (e) => { return this.onNoteCreate(e); });
+        // this.scene.addEventListener('noteCreate', (e) => { return this.onNoteCreate(e); });
         this.noteList = {}
         this.genList = {}
         this.lastNote = undefined;
-        
+
         //suggestor
-        this.suggester = new NoteSuggester(this.x, this.y+this.height*0.6+20, this.width, this.height/3, scene, this.soundPool, 6, 16, this.noteGenerator);
+        this.suggester = new NoteSuggester(this.x, this.y + this.height * 0.6 + 20, this.width, this.height / 3, scene, PianoSoundPool.getInstance(), 6, 16, this.noteGenerator);
         this.addSon(this.suggester);
     }
 
     play() {
-        for (let note of Object.values(this.noteList))
-            note.playInSequence();
+        this.notePlayer.playNotes(Object.values(this.noteList));
     }
 
     handleKey() {
@@ -305,9 +306,9 @@ export class NoteManager extends GameObject {
                 break;
         }
     }
-    onNoteCreate(e) {
-        e.msg.soundPool = this.soundPool;
-    }
+    // onNoteCreate(e) {
+    //     e.msg.soundPool = this.soundPool;
+    // }
     onNoteChange(e) {
         this.clearGenNotes();
         this.genNotes();
@@ -329,8 +330,10 @@ export class NoteManager extends GameObject {
     onLastNoteChange(e) {
         const note = e.msg;
         let dx = this.scene.width / 2 - (note.x + note.width);
+        console.log(note.x);
         // if (0 >= this.x + dx && this.x + dx + this.width >= this.scene.width)
         dx = Math.max(Math.min(dx, -this.x), this.scene.width - this.width - this.x);
+        console.log(dx);
         this.movable.move(dx, 0, 500);
     }
     fixedUpdate(dt) {
@@ -396,7 +399,7 @@ class NoteGenerator {
 }
 
 export class Note extends GameObject {
-    constructor(x, y, width, height, scene, pitch, fourthWidth, startTime, noteLen, bpm, soundPool) {
+    constructor(x, y, width, height, scene, pitch, fourthWidth, startTime, noteLen, bpm, soundPool = PianoSoundPool.getInstance()) {
         super(x, y, width, height, scene);
         this.layer = 100;
         this.pitch = pitch;
@@ -436,7 +439,10 @@ export class Note extends GameObject {
     get duration() {
         return this._noteLen / 4;
     }
-    async play() {
+    get endTime() {
+        return this.startTime + this.duration;
+    }
+    play() {
         let c = this.drawable.fill;
         this.drawable.fill = 'red'
         this.soundPool.play(this.pitch, 60 * 1000 / this.bpm * this.duration);
@@ -444,11 +450,11 @@ export class Note extends GameObject {
             this.drawable.fill = c;
         }, 60 * 1000 / this.bpm * this.duration);
     }
-    playInSequence(offset = 0) {
-        setTimeout(() => {
-            this.play();
-        }, 60 * 1000 / this.bpm * (this.startTime - offset));
-    }
+    // playInSequence(offset = 0) {
+    //     setTimeout(() => {
+    //         this.play();
+    //     }, 60 * 1000 / this.bpm * (this.startTime - offset));
+    // }
     handleMouse() {
 
         if (this.isGen) {
@@ -499,5 +505,59 @@ export class Note extends GameObject {
         super.fixedUpdate(dt);
 
         this.handleMouse();
+    }
+}
+
+class NotePlayer extends GameObject {
+    constructor(scene, bmp, soundPool) {
+        super(0, 0, 0, 0, scene);
+        this.bmp = bmp;
+        this.soundPool = soundPool;
+        this.playing = false;
+        this.startTime = 0;
+        this.endTime = 0;
+        this.curTime = 0;
+        this.notes = [] //notes by ascending order
+    }
+    get progress() {
+        if (this.playing)
+            return (this.curTime - this.starTime) / (this.endTime - this.starTime);
+        return -1;
+    }
+    playNotes(notes, startTime = 0, endTime = Number.MAX_VALUE) {
+        if (this.playing) return;
+        this.playing = false;
+
+        this.notes = Array.from(notes);
+        this.notes.sort((a, b) => { return a.startTime - b.startTime; });
+        this.startTime = Math.max(startTime, this.notes[0].starTime);
+        let end = -1;
+        let firstNode = -1, lastNote = -1;
+        for (let i = 0; i < notes.length; i++) {
+            let note = notes[i];
+            if (this.startTime <= note.startTime && note.startTime < this.endTime) {
+                if (firstNode < 0)
+                    firstNode = i;
+                if (note.endTime > end) {
+                    end = note.endTime;
+                    lastNote = i;
+                }
+            }
+        }
+        this.endTime = Math.min(endTime, end);
+
+        for (let i = firstNode; i <= lastNote; i++) {
+            let note = notes[i];
+            setTimeout(() => {
+                this.curTime = note.starTime;
+                if (i == firstNode) {
+                    this.dispatchEvent(new GOEvent('startPlay', this.startTime));
+                }
+                this.soundPool.play(note.pitch, 60 * 1000 / this.bpm * (Math.min(this.endTime, note.endTime) - note.startTime));
+                this.curTime = Math.min(this.endTime, note.endTime);
+                if (i == lastNote)
+                    this.dispatchEvent(new GOEvent('endPlay', this.curTime));
+            }, 60 * 1000 / this.bpm * (note.startTime - this.startTime));
+        }
     }
 }
