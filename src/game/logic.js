@@ -1,13 +1,9 @@
-import { startGame, Settings, GameScene, GameObject, GOEvent } from './engine/core.js';
-import { MouseControl, KeyControl } from './engine/controller.js';
-import { GridView, ScrollBar } from './engine/go.js';
-import { RoundRectDraw } from './engine/draw.js';
-import { pointInRect, Rect, PriorityQueue, SortedSet } from './engine/utils.js';
-import { GOMask, MouseMask } from './engine/render.js';
-import { Movable } from './engine/animate.js';
+import { Settings, GameScene, GOEvent } from './engine/core.js';
+import { Rect } from './engine/utils.js';
+import { ScrollBar } from './engine/go.js';
 import { PianoSoundPool } from './engine/sound.js';
-import { NoteManager } from './go.js';
-
+import { NoteManager, NoteGenerator } from './go.js';
+import { NoteSuggester } from './suggestion.js';
 //Game Implementatioin
 //
 
@@ -29,11 +25,24 @@ export class GameSettings extends Settings {
 export class NoteWriter extends GameScene {
     constructor(settings) {
         super(settings);
+
+        this.noteGenerator = new NoteGenerator(this);
+
         this.noteManager = new NoteManager(0, 0,
             this.settings.initialSixtenthNoteWidth * this.settings.noteNum * 4,
             this.height - 20,
             this);
+        this.suggester = new NoteSuggester(0, this.height * 0.6 + 20, this.width, this.height / 3, this, PianoSoundPool.getInstance(), 6, 16);
+
         this.noteManagerScroller = new ScrollBar(0, this.noteManager.height, this.width, 20, this, this.noteManager, new Rect(0, 0, this.width, this.noteManager.height), 'x');
+
+        //data flow through GO by event
+        this.noteManager.addEventListener('genNotes', e => this.noteGenerator.onGenNotes(e));
+        // this.noteManager.addEventListener('genNotes', e => this.suggester.onGenNotes(e));
+        this.noteGenerator.addEventListener('genSeqs', e => this.suggester.onGenSeqs(e));
+        this.noteGenerator.addEventListener('genSeq', e => this.noteManager.onGenSeq(e));
+
+        // this.suggester.addEventListener('genSeq', e=>this.noteManager.onGenSeq(e));
         // this.gridMask = new MouseMask(0, 0, 100, 100, this, this.NoteManager.noteGrid);
         // this.NoteManager.layer = 1;
         // this.genNoteManager = new GenNoteManager(0, 0, this.width, this.height, this);

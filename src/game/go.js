@@ -165,43 +165,19 @@ export class NoteManager extends GameObject {
         this.keyControl = new KeyControl(this, this.scene.controller);
         this.movable = new Movable(this);
 
-        this.noteGenerator = new NoteGenerator(this.scene);
 
         this.noteGrid = new NoteGird(this.x, this.y, this.width, this.height * 0.6, scene, this.scene.settings.noteNum * 4, this.scene.settings.pitchNum);
         this.fourthNoteGrid = new GridView(this.x, this.y, this.width, this.height * 0.6, scene, this.scene.settings.noteNum, this.scene.settings.pitchNum, 2);
-        this.notePlayer = new NotePlayer(scene, this.scene.settings.bpm, PianoSoundPool.getInstance());
         this.addSon(this.noteGrid);
         this.addSon(this.fourthNoteGrid);
-        this.addSon(this.notePlayer);
 
-        this.worker = new Worker();
-        this.worker.onmessage = (event) => {
-            if (event.data.fyi) {
-                console.log(event.data.fyi);
-            } else if (event.data.origin == 'NM') {
-                const genSeq = event.data.seq;
-                let notes = this.noteGenerator.seq2Notes(genSeq);
-                this.clearGenNotes();
-                this.placeNotes(notes);
-            } else if (event.data.origin.startsWith('NS')) {
-                const genSeq = event.data.seq;
-                let notes = this.noteGenerator.seq2Notes(genSeq);
 
-                let index = parseInt(event.data.origin.slice(-1));
-                this.suggester.clearNotes(index);
-                this.suggester.placeNotes(index, notes);
-            }
-        }
-        //dummy message to initialize model
-        this.worker.postMessage({ init: 'init' });
+        this.notePlayer = new NotePlayer(scene, this.scene.settings.bpm, PianoSoundPool.getInstance());
 
         this.noteList = {}
         this.genList = {}
         this.lastNote = undefined;
 
-        //suggestor
-        this.suggester = new NoteSuggester(this.x, this.y + this.height * 0.6 + 20, this.width, this.height / 3, scene, PianoSoundPool.getInstance(), 6, 16, this.noteGenerator);
-        this.addSon(this.suggester);
     }
 
     play() {
@@ -235,7 +211,7 @@ export class NoteManager extends GameObject {
                 this.dispatchEvent(new GOEvent('newNote', this.noteList));
 
                 note.play();
-                // this.clearGenNotes();
+                this.clearGenNotes();
                 this.genNotes();
 
                 this.move2LastNote();
@@ -247,6 +223,9 @@ export class NoteManager extends GameObject {
         for (let note of Object.values(this.genList))
             note.destroy();
         this.genList = {};
+    }
+    onGenSeq(e) {
+        this.placeNotes(e.msg);
     }
     placeNotes(genList) {
         //called upon onmessage from worker
@@ -262,9 +241,7 @@ export class NoteManager extends GameObject {
         }
     }
     genNotes() {
-        this.noteGenerator.sample(this.noteList, 'NM');
-        // add notes to suggester as well
-        this.suggester.updateNotes(this.noteList);
+        this.dispatchEvent(new GOEvent('genNotes', this.noteList));
     }
     move2LastNote() {
         const ln = this.getLastNote();
@@ -295,19 +272,20 @@ export class NoteManager extends GameObject {
         let curNote = e.msg;
         let notes = Object.values(this.genList);
         if (notes.length < 1) return;
+        notes = Array.from(notes);
         notes.sort((a, b) => { return a.startTime - b.startTime; });
 
         // let offset = notes[0].startTime;
+        this.clearGenNotes();
 
         for (let note of notes) {
-            note.destroy();
             let userNote = this.createNote(note.x, note.y, note.noteLen);
+            // console.log(userNote);
             // userNote.playInSequence(offset);
 
             if (note.id == curNote.id)
                 break;
         }
-        // this.clearGenNotes();
         this.genNotes();
 
         this.move2LastNote();
@@ -330,7 +308,7 @@ export class NoteManager extends GameObject {
     //     e.msg.soundPool = this.soundPool;
     // }
     onNoteChange(e) {
-        // this.clearGenNotes();
+        this.clearGenNotes();
         this.genNotes();
     }
     onNoteRemove(e) {
@@ -340,7 +318,7 @@ export class NoteManager extends GameObject {
 
             this.move2LastNote();
 
-            // this.clearGenNotes();
+            this.clearGenNotes();
             this.genNotes();
         }
         else {
@@ -364,11 +342,44 @@ export class NoteManager extends GameObject {
     }
 }
 
-class NoteGenerator {
-    constructor(scene, worker) {
-        this.scene = scene;
-        this.worker = worker;
+export class NoteGenerator extends GameObject {
+    constructor(scene) {
+        super(0, 0, 0, 0, scene);
+        this.worker = this.initWorker();
         this.curMessageID = 0;
+    }
+    initWorker() {
+
+        let worker = new Worker();
+        worker.onmessage = (event) => {
+            if (event.data.fyi) {
+                console.log(event.data.fyi);
+            } else if (event.data.origin == 'NM') {
+                const genSeq = event.data.seq;
+                let notes = this.seq2Notes(genSeq);
+                this.dispatchEvent(new GOEvent('genSeq', notes));
+                // this.clearGenNotes();
+                // this.placeNotes(notes);
+            } else if (event.data.origin.startsWith('NS')) {
+                const genSeq = event.data.seq;
+                let notes = this.seq2Notes(genSeq);
+
+                let index = parseInt(event.data.origin.slice(-1));
+                this.dispatchEvent(new GOEvent('genSeqs', { index: index, notes: notes }));
+                // this.suggester.clearNotes(index);
+                // this.suggester.placeNotes(index, notes);
+            }
+        }
+        //dummy message to initialize model
+        worker.postMessage({ init: 'init' });
+        return worker;
+    }
+    onGenNotes(e) {
+        let noteList = e.msg;
+        this.sample(noteList, 'NM');
+        for (let i = 0; i < self.genNum; i++) {
+            this.sample(noteList, 'NS_' + i.toString(), false);
+        }
     }
     sample(notes, messageOrigin = 'NM', delay = true) {
         // can't send Notes object, convert to NoteSequence first
@@ -456,11 +467,11 @@ export class Note extends GameObject {
             this.drawable.fill = c;
         }, 60 * 1000 / this.bpm * this.duration);
     }
-    // playInSequence(offset = 0) {
-    //     setTimeout(() => {
-    //         this.play();
-    //     }, 60 * 1000 / this.bpm * (this.startTime - offset));
-    // }
+    playInSequence(offset = 0) {
+        setTimeout(() => {
+            this.play();
+        }, 60 * 1000 / this.bpm * (this.startTime - offset));
+    }
     handleMouse() {
 
         if (this.isGen) {

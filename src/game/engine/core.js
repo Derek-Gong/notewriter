@@ -49,11 +49,6 @@ class MainLoop {
     logicLoop() {
         let dt = this.lastLogicTime ? new Date().getTime() - this.lastLogicTime : this.dt;
 
-        const events = Array.from(this.scene.eventQueue);
-        for (let e of events) {
-            e();
-            this.scene.eventQueue.shift();
-        }
         for (let go of Object.values(this.scene.goList)) go.fixedUpdate(dt);
 
         this.lastLogicTime = new Date().getTime();
@@ -100,7 +95,6 @@ export class GameScene {
         this.goList = {};
         this.goTree = { 'roots': {} };
         this.eventListeners = {};
-        this.eventQueue = [];
 
         this.controller = new Controller(this, this.goTree, this.settings.tickRate);
     }
@@ -146,8 +140,7 @@ export class GameScene {
             throw 'wrong scene event type';
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
-                this.eventQueue.push(() => { listener(event) });
-        // listener(event)
+                listener(event)
     }
     clear() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -334,18 +327,21 @@ export class GameObject {
             throw 'wrong go event type from', this;
         if (event.type in this.eventListeners)
             for (let listener of this.eventListeners[event.type])
-                this.scene.eventQueue.push(() => { listener(event) });
-        // listener(event)
+                listener(event)
 
         this.scene.dispatchEvent(event);
     }
     destroy() {
+        if (this.destroyed) return false;
+
         this.dispatchEvent(new GOEvent('destroy', this));
         for (let attr of this.attributes) if (attr.destroy) attr.destroy(this);
         this.destroyed = true;
         for (let go of Object.values(this.sons))
             go.destroy();
         this.scene.deleteGO(this);
+
+        return true;
     }
 }
 
