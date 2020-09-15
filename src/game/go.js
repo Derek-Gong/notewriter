@@ -39,26 +39,12 @@ export class NoteGird extends GridView {
 
         return note;
     }
-    placeNote(note) {
+    createFromModelNote(note) {
         const gridX = Math.round(note.startTime * 4), gridY = this.pitch2GridY(note.pitch);
-        if (!this.isGrid(gridX, gridY)) return false;
-        for (let i = 0; i < note.noteLen; i++)
-            if (this.getGrid(gridX + i, gridY))//possessed by another note
-                return false;
         const gridXY = this.getNoteXY(gridX, gridY);
         if (!gridXY) return false;
-
-        // let newNote = new Note(, gridXY[1], this.fourthWidth * note.noteLen / 4, this.noteHeight, this.scene, note.pitch, this.fourthWidth, note.startTime, note.noteLen, this.bpm);
-        note.x = gridXY[0];
-        note.y = gridXY[1];
-        note.width = this.fourthWidth * note.noteLen / 4;
-        note.height = this.noteHeight
-        note.fourthWidth = this.fourthWidth;
-        note.bpm = this.bpm;
-        // note.destroy();
-
-        this.addNote(gridX, gridY, note);
-        return note;
+        const noteLen = Math.round((note.endTime - note.startTime) * 4);
+        return this.createNote(gridXY[0], gridXY[1], noteLen);
     }
     addNote(gridX, gridY, note) {
 
@@ -161,7 +147,7 @@ export class NoteManager extends GameObject {
     constructor(x, y, width, height, scene) {
         super(x, y, width, height, scene);
 
-        this.mouseControl = new MouseControl(this, this.x, this.y, this.width, this.height, this.scene.controller)
+        this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller)
         this.keyControl = new KeyControl(this, this.scene.controller);
         this.movable = new Movable(this);
 
@@ -224,20 +210,19 @@ export class NoteManager extends GameObject {
             note.destroy();
         this.genList = {};
     }
-    onGenSeq(e) {
-        this.placeNotes(e.msg);
-    }
-    placeNotes(genList) {
-        //called upon onmessage from worker
-        for (let note of genList) {
-            if (this.noteGrid.placeNote(note)) {
+    onGenSeq(e) {//called from suggester
+        this.clearGenNotes();
+        let notes = e.msg;
+        for (let note of notes) {
+            note = this.noteGrid.createFromModelNote(note)
+            if (note) {
                 note.drawable.fill = 'green';
                 note.isGen = true;
                 note.addEventListener('destroy', (e) => { return this.onNoteRemove(e); });
                 note.addEventListener('genSelect', (e) => { return this.onGenNoteSelect(e); });
                 note.addEventListener('genPlay', (e) => { return this.onGenNotePlay(e); });
                 this.genList[note.id] = note;
-            } else note.destroy();
+            }
         }
     }
     genNotes() {
@@ -304,9 +289,6 @@ export class NoteManager extends GameObject {
                 break;
         }
     }
-    // onNoteCreate(e) {
-    //     e.msg.soundPool = this.soundPool;
-    // }
     onNoteChange(e) {
         this.clearGenNotes();
         this.genNotes();
@@ -356,35 +338,29 @@ export class NoteGenerator extends GameObject {
                 console.log(event.data.fyi);
             } else if (event.data.origin == 'NM') {
                 const genSeq = event.data.seq;
-                let notes = this.seq2Notes(genSeq);
+                let notes = genSeq.notes;
                 this.dispatchEvent(new GOEvent('genSeq', notes));
-                // this.clearGenNotes();
-                // this.placeNotes(notes);
-            } else if (event.data.origin.startsWith('NS')) {
-                const genSeq = event.data.seq;
-                let notes = this.seq2Notes(genSeq);
+            } else if (event.data.origin == 'NS') {
+                let seqArr = event.data.seqArr;
+                for (let i = 0; i < seqArr.length; i++)
+                    seqArr[i] = seqArr[i].notes;
 
-                let index = parseInt(event.data.origin.slice(-1));
-                this.dispatchEvent(new GOEvent('genSeqs', { index: index, notes: notes }));
-                // this.suggester.clearNotes(index);
-                // this.suggester.placeNotes(index, notes);
+                this.dispatchEvent(new GOEvent('genSeqs', seqArr));
             }
         }
         //dummy message to initialize model
         worker.postMessage({ init: 'init' });
         return worker;
+
     }
     onGenNotes(e) {
         let noteList = e.msg;
-        this.sample(noteList, 'NM');
-        for (let i = 0; i < self.genNum; i++) {
-            this.sample(noteList, 'NS_' + i.toString(), false);
-        }
+        this.sample(noteList, 'NS', true, self.genNum);
     }
-    sample(notes, messageOrigin = 'NM', delay = true) {
+    sample(notes, messageOrigin = 'NM', delay = true, seqNum = 1) {
         // can't send Notes object, convert to NoteSequence first
         let inputSeq = this.notes2Seq(notes);
-        this.worker.postMessage({ seq: inputSeq, origin: messageOrigin, delay: delay });
+        this.worker.postMessage({ seq: inputSeq, origin: messageOrigin, delay: delay, seqNum: seqNum });
     }
     notes2Seq(notes) {
         if (notes instanceof Object)
@@ -400,14 +376,14 @@ export class NoteGenerator extends GameObject {
         }
         return new Model.NoteSequence(totalTime, this.bpm, notes);
     }
-    seq2Notes(seq) {
-        let notes = seq.notes;
-        for (let i = notes.length - 1; i >= 0; i--) {
-            let note = notes[i];
-            notes[i] = new Note(0, 0, 0, 0, this.scene, note.pitch, 0, note.startTime, Math.round((note.endTime - note.startTime) * 4), 0);
-        }
-        return notes;
-    }
+    // seq2Notes(seq) {
+    //     let notes = seq.notes;
+    //     for (let i = notes.length - 1; i >= 0; i--) {
+    //         let note = notes[i];
+    //         notes[i] = new Note(0, 0, 0, 0, this.scene, note.pitch, 0, note.startTime, Math.round((note.endTime - note.startTime) * 4), 0);
+    //     }
+    //     return notes;
+    // }
     handleKey() {
 
     }

@@ -36,13 +36,11 @@ export class NoteWriter extends GameScene {
 
         this.noteManagerScroller = new ScrollBar(0, this.noteManager.height, this.width, 20, this, this.noteManager, new Rect(0, 0, this.width, this.noteManager.height), 'x');
 
-        //data flow through GO by event
+        //data flow between GO by event
         this.noteManager.addEventListener('genNotes', e => this.noteGenerator.onGenNotes(e));
-        // this.noteManager.addEventListener('genNotes', e => this.suggester.onGenNotes(e));
         this.noteGenerator.addEventListener('genSeqs', e => this.suggester.onGenSeqs(e));
-        this.noteGenerator.addEventListener('genSeq', e => this.noteManager.onGenSeq(e));
+        this.suggester.addEventListener('genSeq', e => this.noteManager.onGenSeq(e));
 
-        // this.suggester.addEventListener('genSeq', e=>this.noteManager.onGenSeq(e));
         // this.gridMask = new MouseMask(0, 0, 100, 100, this, this.NoteManager.noteGrid);
         // this.NoteManager.layer = 1;
         // this.genNoteManager = new GenNoteManager(0, 0, this.width, this.height, this);

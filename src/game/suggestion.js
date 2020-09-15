@@ -1,4 +1,4 @@
-import { GameObject } from './engine/core.js';
+import { GameObject, GOEvent } from './engine/core.js';
 import { NoteGird } from './go.js'
 import { MouseControl, KeyControl } from './engine/controller.js';
 
@@ -12,11 +12,13 @@ export class NoteSuggester extends GameObject {
     self.genNum = genNum;
     self.genLength = genLength;
     // this.addSon(this.fourthNoteGrid);
+    this.mouseControl = new MouseControl(this, 0, 0, this.width, this.height, this.scene.controller);
     this.keyControl = new KeyControl(this, this.scene.controller);
 
     this.soundPool = soundPool;
     this.noteLists = [];//nested array to keep generated notes
     this.noteGrids = [];
+    this.notesArr = []
     let posX;
     for (let i = 0; i < genNum; i++) {
       this.noteLists.push([]);
@@ -26,25 +28,42 @@ export class NoteSuggester extends GameObject {
       this.addSon(this.noteGrids[i]);
     }
   }
-
+  get selectIndex() {
+    return this._selectIndex;
+  }
+  set selectIndex(id) {
+    if (0 <= id && id < self.genNum)
+      this._selectIndex = id;
+    this.dispatchEvent(new GOEvent('genSeq', this.notesArr[this._selectIndex]));
+  }
   play(index) {
     for (let note of this.noteLists[index])
       note.playInSequence();
   }
-  // onGenNotes(e) {//event from NoteManager
-  //   let noteList = e.msg;
-  //   this.updateNotes(noteList);
-  // }
   onGenSeqs(e) {//event from NoteGenerator
-    let index = e.msg.index;
-    let notes = e.msg.notes;
-    this.clearNotes(index);
-    this.placeNotes(index, notes);
+    for (let i = 0; i < self.genNum; i++)
+      this.clearNotes(i);
+    let notesArr = e.msg;
+    console.log(notesArr)
+    if (notesArr.length < 1) return;
+    this.notesArr = Array.from(notesArr);
+    this.selectIndex = notesArr.length / 2;
+    for (let i = 0; i < notesArr.length; i++)
+      this.genNotes(i, notesArr[i]);
   }
-  placeNotes(index, notes) {
+  genNotes(index, notes) {
+    if (notes.length < 1) return;
+    const offset = notes[0].startTime;
+
     for (let note of notes) {
-      this.noteGrids[index].placeNote(note);
-      this.noteLists[index].push(note);
+      note = Object.assign({}, note);
+      note.startTime -= offset;
+      note.endTime -= offset;
+      note = this.noteGrids[index].createFromModelNote(note);
+      if (note) {
+        note.mouseControl.destroy();
+        this.noteLists[index].push(note);
+      }
     }
   }
 
@@ -62,9 +81,19 @@ export class NoteSuggester extends GameObject {
   // }
 
   handleMouse() {
-    // if (this.mouseControl.clicked) {
-    //pulsate or something
-    // }
+    const x = this.mouseControl.offsetX, y = this.mouseControl.offsetY;
+    if (this.mouseControl.clicked) {
+      // pulsate or something
+      for (let i = 0; i < self.genNum; i++)
+        if (this.noteGrids[i].hitTest(x, y))
+          this.selectIndex = i;
+      this.mouseControl.reset();
+    } else if (this.mouseControl.rightClicked) {
+      for (let i = 0; i < self.genNum; i++)
+        if (this.noteGrids[i].hitTest(x, y))
+          this.play(i);
+      this.mouseControl.reset();
+    }
   }
   handleKey() {
     if (this.keyControl.keyup) {
@@ -79,6 +108,7 @@ export class NoteSuggester extends GameObject {
   }
   fixedUpdate(dt) {
     super.fixedUpdate(dt);
+    this.handleMouse();
     this.handleKey();
   }
 }
